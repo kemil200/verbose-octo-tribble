@@ -6,11 +6,41 @@
 
 import streamlit as st
 import numpy as np
-import numpy_financial as npf
 import pandas as pd
 import matplotlib.pyplot as plt
 import matplotlib.ticker as mticker
-from itertools import product
+
+
+# =============================================================================
+# REMPLACEMENT DE numpy_financial (evite la dependance externe)
+# =============================================================================
+
+def npv(rate, cashflows):
+    """Valeur Actuelle Nette : somme des flux actualises."""
+    cashflows = np.asarray(cashflows, dtype=float)
+    indices = np.arange(len(cashflows))
+    return np.sum(cashflows / (1 + rate) ** indices)
+
+
+def irr(cashflows, tol=1e-7, max_iter=1000):
+    """
+    Taux de Rendement Interne par methode de Newton-Raphson.
+    Retourne None si la convergence echoue.
+    """
+    cashflows = np.asarray(cashflows, dtype=float)
+    # Valeur initiale : estimation grossiere
+    rate = 0.1
+    for _ in range(max_iter):
+        indices = np.arange(len(cashflows))
+        f  = np.sum(cashflows / (1 + rate) ** indices)
+        df = np.sum(-indices * cashflows / (1 + rate) ** (indices + 1))
+        if df == 0:
+            return None
+        rate_new = rate - f / df
+        if abs(rate_new - rate) < tol:
+            return rate_new
+        rate = rate_new
+    return None  # Pas de convergence
 
 # =============================================================================
 # CONFIGURATION GLOBALE DE LA PAGE
@@ -136,9 +166,9 @@ def calculer_metriques(fcff_liste, capex_initial, wacc):
     dict : VAN (MFCFA), TRI (%), Payback (annees)
     """
     flux = [-capex_initial] + [r["FCFF (MFCFA)"] * 1e6 for r in fcff_liste]
-    van = npf.npv(wacc, flux)
+    van = npv(wacc, flux)
     try:
-        tri = npf.irr(flux)
+        tri = irr(flux)
     except Exception:
         tri = None
 
