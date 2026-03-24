@@ -1,11 +1,18 @@
 # =============================================================================
-# CommodityWatch v3.0
+# CommodityWatch v4.1 — Overview Pré-Investissement
 # Framework : Streamlit + Plotly | Python 3.9+
 # Usage     : streamlit run app.py
 #
-
+# Philosophie : outil de première impression — l'analyste, le banquier ou le
+#               promoteur obtient en 5 minutes une lecture complète du projet
+#               avant toute modélisation Excel approfondie.
 #
-
+# Architecture :
+#   1 Business Model = 1 logique financière = 1 risque = 1 assurance
+#
+#   Production    → Plantation/Élevage   → Assurance Récolte
+#   Infrastructure→ Construction/Usine   → Assurance Tous Risques Chantier
+#   Campagne      → Transformation/Vente → Assurance Qualité / Rappel Produit
 # =============================================================================
 
 import streamlit as st
@@ -25,9 +32,9 @@ except ImportError:
 # CONSTANTES
 # =============================================================================
 
-TAUX_CHANGE  = 600.0      # 1 USD = 600 FCFA
+TAUX_CHANGE = 600.0   # 1 USD = 600 FCFA
 
-PRIX_REF_USD = {           # USD / Tonne  —  ICE/Euronext/OTC indicatif
+PRIX_REF_USD = {
     "Cacao"           : 7_800,
     "Café (Arabica)"  : 4_200,
     "Café (Robusta)"  : 2_800,
@@ -40,53 +47,64 @@ PRIX_REF_USD = {           # USD / Tonne  —  ICE/Euronext/OTC indicatif
     "Personnalisé"    :     0,
 }
 
-# Risque & assurance associés à chaque Business Model
-# (risque_label, assurance_label, gravite_defaut, description_risque, description_assurance)
-BM_RISQUE = {
-    "Production" : {
-        "risque_label"        : "Risque Récolte (Climatique / Phytosanitaire)",
-        "assurance_label"     : "Assurance Agricole / Récolte",
-        "gravite_defaut"      : 0.40,
-        "description_risque"  : (
-            "Sécheresse, inondation, gel, épidémie phytosanitaire ou "
-            "ravageurs pouvant réduire le rendement de façon significative."
+# Un seul risque par Business Model — logique métier ancrée dans le code
+BM_CONFIG = {
+    "Production": {
+        "icon"               : "🌱",
+        "description"        : "Plantation / Élevage — revenu lié à la récolte",
+        "risque_titre"       : "Risque Récolte",
+        "risque_desc"        : (
+            "Sécheresse, inondation, épidémie phytosanitaire ou ravageurs "
+            "pouvant réduire le rendement de façon significative."
         ),
-        "description_assurance": (
-            "L'assurance récolte indemnise une fraction de la perte de production "
-            "constatée. La prime est une charge opérationnelle annuelle."
+        "assurance_titre"    : "Assurance Agricole / Récolte",
+        "assurance_desc"     : (
+            "Indemnise une fraction de la perte de production constatée. "
+            "La prime est une charge annuelle d'exploitation."
         ),
+        "gravite_defaut"     : 0.40,
+        "bfr_actif"          : False,
+        "bio_actif"          : True,
     },
-    "Infrastructure" : {
-        "risque_label"        : "Risque Opérationnel (Panne / Chantier)",
-        "assurance_label"     : "Assurance Tous Risques Chantier & Bris de Machine",
-        "gravite_defaut"      : 0.25,
-        "description_risque"  : (
+    "Infrastructure": {
+        "icon"               : "🏭",
+        "description"        : "Construction / Extension d'usine — CAPEX dominant",
+        "risque_titre"       : "Risque Opérationnel (Panne / Chantier)",
+        "risque_desc"        : (
             "Panne majeure d'équipement, accident de chantier, incendie "
-            "ou explosion réduisant la capacité de production installée."
+            "réduisant la capacité de production installée."
         ),
-        "description_assurance": (
-            "L'assurance TRC / Bris de Machine couvre les dommages matériels "
-            "et la perte d'exploitation consécutive à un sinistre sur l'outil industriel."
+        "assurance_titre"    : "Assurance TRC & Bris de Machine",
+        "assurance_desc"     : (
+            "Couvre les dommages matériels et la perte d'exploitation "
+            "consécutive à un sinistre sur l'outil industriel."
         ),
+        "gravite_defaut"     : 0.25,
+        "bfr_actif"          : False,
+        "bio_actif"          : False,
     },
-    "Campagne" : {
-        "risque_label"        : "Risque Qualité (Non-conformité / Rappel Produit)",
-        "assurance_label"     : "Assurance Qualité & Responsabilité Produit",
-        "gravite_defaut"      : 0.20,
-        "description_risque"  : (
-            "Lot non conforme aux normes export (humidité, aflatoxines, résidus), "
-            "perte de certification, rappel de produit ou embargo à l'exportation."
+    "Campagne": {
+        "icon"               : "🔄",
+        "description"        : "Achat matière — Transformation — Vente",
+        "risque_titre"       : "Risque Qualité / Non-conformité",
+        "risque_desc"        : (
+            "Lot non conforme aux normes export, perte de certification, "
+            "rappel produit ou embargo à l'exportation."
         ),
-        "description_assurance": (
-            "L'assurance qualité / responsabilité produit couvre les pertes de CA "
-            "liées au retrait de lot, aux pénalités contractuelles et aux frais de rappel."
+        "assurance_titre"    : "Assurance Qualité & Responsabilité Produit",
+        "assurance_desc"     : (
+            "Couvre les pertes de CA liées au retrait de lot, aux pénalités "
+            "contractuelles et aux frais de rappel ou de décontamination."
         ),
+        "gravite_defaut"     : 0.20,
+        "bfr_actif"          : True,
+        "bio_actif"          : False,
     },
 }
 
-SEUIL_CHARGES_CA  = 0.55   # Alerte si charges opé > 55 % du CA
-SEUIL_DSCR_ALERTE = 1.30   # Seuil bancaire standard
-SEUIL_DSCR_DEFAUT = 1.00   # Seuil de défaut
+SEUIL_CHARGES  = 0.55   # Alerte charges / CA
+SEUIL_BANCAIRE = 1.30   # DSCR seuil standard
+SEUIL_DEFAUT   = 1.00
 
 CLR = {
     "vert"  : "#198754",
@@ -94,7 +112,6 @@ CLR = {
     "amber" : "#fd7e14",
     "bleu"  : "#0d6efd",
     "gris"  : "#6c757d",
-    "fond"  : "#f8f9fa",
 }
 
 
@@ -102,7 +119,7 @@ CLR = {
 # UTILITAIRES MATHÉMATIQUES
 # =============================================================================
 
-def npv_calc(rate: float, cashflows) -> float:
+def npv_calc(rate, cashflows):
     cf = np.asarray(cashflows, dtype=float)
     t  = np.arange(len(cf))
     return float(np.sum(cf / (1 + rate) ** t))
@@ -126,22 +143,25 @@ def irr_calc(cashflows, tol=1e-7, max_iter=1500):
     return None
 
 
-def en_fcfa(val, devise):
+def fcfa(val, devise):
+    """Convertit en FCFA depuis la devise de saisie."""
     return val if devise == "FCFA" else val * TAUX_CHANGE
 
-def en_devise(val_fcfa, devise):
+
+def affiche(val_fcfa, devise, dec=2):
+    """Convertit pour affichage dans la devise choisie."""
     return val_fcfa if devise == "FCFA" else val_fcfa / TAUX_CHANGE
 
-def fmt(val, devise, dec=2):
+
+def fmt(val, devise, dec=1):
     return f"{val:,.{dec}f} M{devise}"
 
 
 # =============================================================================
-# CORE — RAMP-UP
+# MOTEUR — RAMP-UP
 # =============================================================================
 
 def build_rampup(duree, paliers):
-    """Vecteur de coefficients [0..1] par année selon les paliers configurés."""
     coeffs = []
     for an in range(1, duree + 1):
         taux = 1.0
@@ -154,15 +174,10 @@ def build_rampup(duree, paliers):
 
 
 # =============================================================================
-# CORE — BFR PAR BUSINESS MODEL
+# MOTEUR — BFR (Campagne uniquement)
 # =============================================================================
 
 def calc_bfr(bm, revenus, couts, j_stock, j_clients, j_fourn):
-    """
-    Production    : BFR résiduel ~5 % revenus (vente spot à la récolte)
-    Infrastructure: BFR nul (paiements contractuels)
-    Campagne      : BFR complet (stock matière + crédit clients - crédit fournisseurs)
-    """
     if bm == "Campagne":
         return couts * j_stock / 365 + revenus * j_clients / 365 - couts * j_fourn / 365
     if bm == "Production":
@@ -171,7 +186,7 @@ def calc_bfr(bm, revenus, couts, j_stock, j_clients, j_fourn):
 
 
 # =============================================================================
-# CORE — PROJECTION FCFF
+# MOTEUR — PROJECTION FCFF
 # =============================================================================
 
 def projeter_fcff(quantite, prix, cout, capex, taux_is, inflation,
@@ -179,25 +194,21 @@ def projeter_fcff(quantite, prix, cout, capex, taux_is, inflation,
                   duree_bio=0, j_stock=60, j_clients=30, j_fourn=45,
                   ratio_maint=0.02):
     """
-    Projection Free Cash Flow to Firm intégrant :
-      - Courbe de ramp-up
-      - Phase biologique (Production uniquement)
-      - Delta BFR annuel
-      - CAPEX de maintenance
-    Tous les montants de retour sont en FCFA.
+    Retourne une liste de dicts, un par année.
+    Tous les montants sont en FCFA.
     """
-    amort  = capex / duree
+    amort   = capex / duree
     c_maint = capex * ratio_maint
-    rows, bfr_prec = [], 0.0
+    rows    = []
+    bfr_prec = 0.0
 
     for an in range(1, duree + 1):
-        coeff  = rampup[an - 1]
-        # Blocage biologique (plantation : pas de revenu avant maturité)
+        coeff = rampup[an - 1]
         if bm == "Production" and an <= duree_bio:
             coeff = 0.0
-        inf    = (1 + inflation) ** (an - 1)
-        rev    = quantite * coeff * prix  * inf
-        cout_  = quantite * coeff * cout  * inf
+        inf   = (1 + inflation) ** (an - 1)
+        rev   = quantite * coeff * prix  * inf
+        cout_ = quantite * coeff * cout  * inf
         ebitda = rev - cout_
         ebit   = ebitda - amort
         impot  = max(ebit * taux_is, 0.0)
@@ -208,21 +219,21 @@ def projeter_fcff(quantite, prix, cout, capex, taux_is, inflation,
         fcff   = nopat + amort - c_maint - delta
 
         rows.append({
-            "Annee"          : an,
-            "Ramp-up"        : round(coeff * 100, 1),
-            "Revenus"        : rev,
-            "Couts"          : cout_,
-            "EBITDA"         : ebitda,
-            "EBIT"           : ebit,
-            "IS"             : impot,
-            "Delta BFR"      : delta,
-            "FCFF"           : fcff,
-            "Ratio Charges"  : round(cout_ / rev, 3) if rev > 0 else np.nan,
+            "Annee"         : an,
+            "Ramp_up"       : coeff * 100,
+            "Revenus"       : rev,
+            "Couts"         : cout_,
+            "EBITDA"        : ebitda,
+            "EBIT"          : ebit,
+            "IS"            : impot,
+            "Delta_BFR"     : delta,
+            "FCFF"          : fcff,
+            "Ratio_Charges" : (cout_ / rev) if rev > 0 else np.nan,
         })
     return rows
 
 
-def metriques_rentabilite(rows, capex, wacc):
+def metriques(rows, capex, wacc):
     flux    = [-capex] + [r["FCFF"] for r in rows]
     van     = npv_calc(wacc, flux)
     tri     = irr_calc(flux)
@@ -236,37 +247,33 @@ def metriques_rentabilite(rows, capex, wacc):
 
 
 # =============================================================================
-# CORE — DETTE AVANCÉE (commissions flat & engagement)
+# MOTEUR — SERVICE DE LA DETTE AVANCÉ
 # =============================================================================
 
 def service_dette(rows, capex, p_dette, r_dette, dur_dette,
-                  grace, wacc, c_flat, c_engagt, profil_decaiss):
+                  grace, wacc, c_flat, c_engagt, profil_dec):
     """
-    Construit le tableau annuel du service de la dette.
-
-    Commissions :
-      - Flat      : % du montant total, prélevée une seule fois au 1er décaissement
-      - Engagement: % annuel sur la fraction non encore décaissée du prêt
-
-    Grace period : pendant ces années, seuls les intérêts sont dus (pas de capital).
+    Tableau annuel du service de la dette.
+    Inclut commission flat (prélevée une fois) et commission d'engagement
+    (sur la fraction non décaissée chaque année).
     """
-    dette      = capex * p_dette
-    ann_remb   = max(dur_dette - grace, 1)
-    amort_cap  = dette / ann_remb
-    cout_flat  = dette * c_flat
-    encours    = dette
-    cum_dec    = 0.0
-    total_int  = cout_flat   # coût total = flat + intérêts + commissions engagement
-    rows_out   = []
+    dette     = capex * p_dette
+    ann_remb  = max(dur_dette - grace, 1)
+    amort_cap = dette / ann_remb
+    c_flat_mt = dette * c_flat   # montant commission flat
+    encours   = dette
+    cum_dec   = 0.0
+    total_int = c_flat_mt
+    out       = []
 
     for i, r in enumerate(rows):
-        an    = r["Annee"]
-        fcff  = r["FCFF"]
+        an   = r["Annee"]
+        fcff = r["FCFF"]
 
-        frac_dec    = profil_decaiss[i] if i < len(profil_decaiss) else 0.0
-        non_dec     = max(dette - cum_dec, 0.0)
-        ce_an       = non_dec * c_engagt if cum_dec < dette else 0.0
-        cum_dec    += dette * frac_dec
+        frac_dec  = profil_dec[i] if i < len(profil_dec) else 0.0
+        non_dec   = max(dette - cum_dec, 0.0)
+        ce_an     = non_dec * c_engagt if cum_dec < dette else 0.0
+        cum_dec  += dette * frac_dec
 
         if an <= dur_dette:
             interets = encours * r_dette
@@ -279,12 +286,12 @@ def service_dette(rows, capex, p_dette, r_dette, dur_dette,
             llcr     = npv_calc(r_dette, ff_rest) / encours if encours > 0 else np.nan
 
             total_int += interets + ce_an
-            rows_out.append({
+            out.append({
                 "Annee"        : an,
                 "Encours"      : encours,
                 "Interets"     : interets,
-                "Remb Capital" : remb_cap,
-                "Comm Engagt"  : ce_an,
+                "Remb_Capital" : remb_cap,
+                "Comm_Engagt"  : ce_an,
                 "Service"      : svc,
                 "FCFF"         : fcff,
                 "DSCR"         : round(dscr, 3) if not np.isnan(dscr) else np.nan,
@@ -293,12 +300,12 @@ def service_dette(rows, capex, p_dette, r_dette, dur_dette,
             })
             encours = enc_fin
         else:
-            rows_out.append({
+            out.append({
                 "Annee"        : an,
                 "Encours"      : 0.0,
                 "Interets"     : 0.0,
-                "Remb Capital" : 0.0,
-                "Comm Engagt"  : 0.0,
+                "Remb_Capital" : 0.0,
+                "Comm_Engagt"  : 0.0,
                 "Service"      : 0.0,
                 "FCFF"         : fcff,
                 "DSCR"         : np.nan,
@@ -306,105 +313,102 @@ def service_dette(rows, capex, p_dette, r_dette, dur_dette,
                 "Grace"        : False,
             })
 
-    df     = pd.DataFrame(rows_out)
+    df     = pd.DataFrame(out)
     dscrs  = df["DSCR"].dropna()
-    d_min  = round(float(dscrs.min()), 3)  if len(dscrs) else np.nan
+    d_min  = round(float(dscrs.min()),  3) if len(dscrs) else np.nan
     d_moy  = round(float(dscrs.mean()), 3) if len(dscrs) else np.nan
-    ff_llcr  = [r["FCFF"] for r in rows[:dur_dette]]
-    llcr_g   = round(npv_calc(r_dette, ff_llcr) / dette, 3) if dette > 0 else np.nan
+    ff_l   = [r["FCFF"] for r in rows[:dur_dette]]
+    llcr_g = round(npv_calc(r_dette, ff_l) / dette, 3) if dette > 0 else np.nan
     return df, d_min, d_moy, llcr_g, total_int
 
 
 # =============================================================================
-# M4 — STRESS TEST CONTEXTUEL (1 risque / 1 assurance par Business Model)
+# MOTEUR — STRESS TEST (Sans probabilité, 2 scénarios : Choc / Avec Assurance)
 # =============================================================================
 
-def stress_test(rows, bm, prob, gravite,
-                prime_ann, indemnite_pct,
+def stress_test(rows, gravite, prime_ann, indem_pct,
                 capex, p_dette, r_dette, dur_dette,
-                grace, wacc, c_flat, c_engagt, profil_decaiss):
+                grace, wacc, c_flat, c_engagt, profil_dec):
     """
-    Calcule pour l'unique risque associé au Business Model :
-      - Scénario BASE       : aucun choc, aucune assurance
-      - Scénario CHOC BRUT  : choc à l'année centrale, sans assurance
-      - Scénario ASSURANCE  : choc + prime annuelle + indemnité l'année du choc
+    Calcule 3 scénarios discrets :
+      BASE      : flux projetés nominaux, sans perturbation
+      CHOC      : choc concentré à l'année centrale (perte revenus × gravité),
+                  sans assurance
+      ASSURANCE : même choc + prime annuelle en charge + indemnité à l'année du choc
 
-    Le choc réduit les revenus de `gravite` × 100 %, ce qui réduit le FCFF.
-    Retourne un dict avec les 3 séries (DSCR, trésorerie cumulée, FCFF).
+    Retourne pour chaque scénario :
+      - rows avec Tresorerie_cum
+      - DSCR annuel
+      - DSCR minimum
     """
-    duree     = len(rows)
-    an_choc   = max(1, duree // 2)
+    duree   = len(rows)
+    an_choc = max(1, duree // 2)
 
-    def appliquer_choc(rows_in, avec_assurance):
-        rows_out   = []
-        tresorerie = 0.0
-        for r in rows_in:
+    def appliquer(avec_assurance, avec_choc):
+        """Construit la série de flux pour un scénario donné."""
+        out   = []
+        treso = 0.0
+        for r in rows:
+            an   = r["Annee"]
             fcff = r["FCFF"]
             rev  = r["Revenus"]
-            an   = r["Annee"]
 
-            # Impact du choc
-            perte = rev * gravite if an == an_choc else 0.0
-            fcff  = fcff - perte
-
-            # Assurance
+            perte = rev * gravite if (avec_choc and an == an_choc) else 0.0
+            fcff -= perte
             if avec_assurance:
-                fcff -= prime_ann                              # prime chaque année
+                fcff -= prime_ann
                 if an == an_choc:
-                    fcff += perte * indemnite_pct              # indemnité l'année du choc
+                    fcff += perte * indem_pct
 
-            tresorerie += fcff
-            rows_out.append({
+            treso += fcff
+            out.append({
                 "Annee"          : an,
                 "FCFF"           : fcff,
                 "Revenus"        : rev,
-                "Tresorerie_cum" : tresorerie,
+                "Tresorerie_cum" : treso,
             })
-        return rows_out
+        return out
 
-    base_rows  = [{"Annee": r["Annee"], "FCFF": r["FCFF"], "Revenus": r["Revenus"]} for r in rows]
-    choc_rows  = appliquer_choc(base_rows, avec_assurance=False)
-    assur_rows = appliquer_choc(base_rows, avec_assurance=True)
+    base_rows  = appliquer(avec_assurance=False, avec_choc=False)
+    choc_rows  = appliquer(avec_assurance=False, avec_choc=True)
+    assur_rows = appliquer(avec_assurance=True,  avec_choc=True)
 
-    def get_dscr(scenario_rows):
-        df_s, dmin, dmoy, _, _ = service_dette(
+    def dscr_pour(scenario_rows):
+        df_s, dmin, _, _, _ = service_dette(
             scenario_rows, capex, p_dette, r_dette, dur_dette,
-            grace, wacc, c_flat, c_engagt, profil_decaiss
+            grace, wacc, c_flat, c_engagt, profil_dec,
         )
         return df_s["DSCR"].tolist(), dmin
 
-    dscr_base_l,  dscr_base_min  = get_dscr(base_rows)
-    dscr_choc_l,  dscr_choc_min  = get_dscr(choc_rows)
-    dscr_assur_l, dscr_assur_min = get_dscr(assur_rows)
+    d_base_l,  d_base_min  = dscr_pour(base_rows)
+    d_choc_l,  d_choc_min  = dscr_pour(choc_rows)
+    d_assur_l, d_assur_min = dscr_pour(assur_rows)
 
-    # Perte nette de CA en valeur absolue
-    perte_brute  = rows[an_choc - 1]["Revenus"] * gravite
-    indemnite    = perte_brute * indemnite_pct
-    cout_primes  = prime_ann * duree
-    gain_net_ass = indemnite - cout_primes
+    perte_brute = rows[an_choc - 1]["Revenus"] * gravite
+    indemnite   = perte_brute * indem_pct
+    cout_primes = prime_ann * duree
 
     return {
-        "an_choc"         : an_choc,
-        "perte_brute"     : perte_brute,
-        "indemnite"       : indemnite,
-        "cout_primes"     : cout_primes,
-        "gain_net_ass"    : gain_net_ass,
-        "base"            : {"rows": base_rows,  "dscr": dscr_base_l,  "dscr_min": dscr_base_min},
-        "choc"            : {"rows": choc_rows,  "dscr": dscr_choc_l,  "dscr_min": dscr_choc_min},
-        "assurance"       : {"rows": assur_rows, "dscr": dscr_assur_l, "dscr_min": dscr_assur_min},
+        "an_choc"      : an_choc,
+        "perte_brute"  : perte_brute,
+        "indemnite"    : indemnite,
+        "cout_primes"  : cout_primes,
+        "gain_net"     : indemnite - cout_primes,
+        "base"         : {"rows": base_rows,  "dscr": d_base_l,  "dmin": d_base_min},
+        "choc"         : {"rows": choc_rows,  "dscr": d_choc_l,  "dmin": d_choc_min},
+        "assurance"    : {"rows": assur_rows, "dscr": d_assur_l, "dmin": d_assur_min},
     }
 
 
 # =============================================================================
-# TORNADO & SENSIBILITÉ
+# MOTEUR — TORNADO & SENSIBILITÉ
 # =============================================================================
 
 def calc_tornado(quantite, prix, cout, capex, taux_is, inflation,
                  duree, rampup, bm, wacc,
                  duree_bio=0, j_stock=60, j_clients=30, j_fourn=45, delta=0.10):
     def van(**kw):
-        fl = projeter_fcff(**kw)
-        return metriques_rentabilite(fl, kw["capex"], wacc)["van"]
+        return metriques(projeter_fcff(**kw), kw["capex"], wacc)["van"]
 
     base = dict(quantite=quantite, prix=prix, cout=cout, capex=capex,
                 taux_is=taux_is, inflation=inflation, duree=duree,
@@ -412,19 +416,17 @@ def calc_tornado(quantite, prix, cout, capex, taux_is, inflation,
                 j_stock=j_stock, j_clients=j_clients, j_fourn=j_fourn)
     van_ref = van(**base)
 
-    items = [
-        ("Prix de Vente",  "prix",     prix),
-        ("Volume Produit", "quantite", quantite),
-        ("CAPEX",          "capex",    capex),
-        ("Coût Production","cout",     cout),
-    ]
     result = []
-    for label, param, val in items:
+    for label, param, val in [
+        ("Prix de Vente",   "prix",     prix),
+        ("Volume Produit",  "quantite", quantite),
+        ("CAPEX",           "capex",    capex),
+        ("Coût Production", "cout",     cout),
+    ]:
         vm = van(**{**base, param: val * (1 - delta)})
         vp = van(**{**base, param: val * (1 + delta)})
-        result.append({"Variable": label,
-                        "im": vm - van_ref, "ip": vp - van_ref,
-                        "amp": abs(vp - vm)})
+        result.append({"Variable": label, "im": vm - van_ref,
+                        "ip": vp - van_ref, "amp": abs(vp - vm)})
     result.sort(key=lambda x: x["amp"], reverse=True)
     return result, van_ref
 
@@ -441,25 +443,24 @@ def calc_sensibilite(quantite, prix, cout, capex, taux_is, inflation,
             fl = projeter_fcff(quantite, prix*(1+vp), cout*(1+vc), capex,
                                taux_is, inflation, duree, rampup, bm,
                                duree_bio, j_stock, j_clients, j_fourn)
-            col.append(metriques_rentabilite(fl, capex, wacc)["van"])
+            col.append(metriques(fl, capex, wacc)["van"])
         data[f"Coût {int(vc*100):+d}%"] = col
     return pd.DataFrame(data, index=[f"Prix {l}" for l in labs])
 
 
 # =============================================================================
-# M2 — IMPORT EXCEL
+# IMPORT EXCEL
 # =============================================================================
 
 def parser_excel(fichier):
-    """Détecte les postes financiers standards par mots-clés bilingues."""
     MAPPING = {
-        "ca"               : ["chiffre d'affaires","revenus","turnover","sales"],
-        "charges"          : ["charges d'exploitation","opex","operating expenses"],
-        "amort"            : ["amortissement","depreciation"],
-        "resultat_net"     : ["résultat net","net income","bénéfice net"],
-        "actif_immo"       : ["actif immobilisé","immobilisations","fixed assets"],
-        "capitaux_propres" : ["capitaux propres","equity","fonds propres"],
-        "dettes_fin"       : ["dettes financières","emprunts","financial debt"],
+        "ca"              : ["chiffre d'affaires", "revenus", "turnover", "sales"],
+        "charges"         : ["charges d'exploitation", "opex", "operating expenses"],
+        "amort"           : ["amortissement", "depreciation"],
+        "resultat_net"    : ["résultat net", "net income", "bénéfice net"],
+        "actif_immo"      : ["actif immobilisé", "immobilisations", "fixed assets"],
+        "capitaux_propres": ["capitaux propres", "equity", "fonds propres"],
+        "dettes_fin"      : ["dettes financières", "emprunts", "financial debt"],
     }
     try:
         xls  = pd.ExcelFile(fichier)
@@ -473,7 +474,8 @@ def parser_excel(fichier):
                         for syn in syns:
                             if syn in lib:
                                 nums = [v for v in row.iloc[1:]
-                                        if isinstance(v, (int, float)) and not np.isnan(float(v))]
+                                        if isinstance(v, (int, float))
+                                        and not np.isnan(float(v))]
                                 if nums:
                                     data[cle] = float(nums[0])
                                 break
@@ -483,252 +485,170 @@ def parser_excel(fichier):
 
 
 # =============================================================================
-# GRAPHIQUES PLOTLY
+# GRAPHIQUES — épurés, orientés overview
 # =============================================================================
 
-def fig_overview_kpis(van, tri, wacc_val, dscr_min, llcr, pb, devise):
-    """Jauge visuelle des 3 indicateurs clés pour l'overview investisseur."""
-    # DSCR gauge
-    dscr_v = dscr_min if not np.isnan(dscr_min) else 0
+def fig_jauges(van, tri, wacc_val, dscr_min, devise):
+    """3 jauges : VAN / TRI vs WACC / DSCR min — lecture immédiate."""
+    dscr_v = dscr_min if not np.isnan(dscr_min) else 0.0
+    tri_v  = (tri * 100) if tri else 0.0
+    van_m  = van / 1e6
+
     fig = make_subplots(
         rows=1, cols=3,
-        specs=[[{"type": "indicator"}, {"type": "indicator"}, {"type": "indicator"}]],
+        specs=[[{"type": "indicator"}] * 3],
+        horizontal_spacing=0.05,
     )
+
+    # VAN
+    van_range = max(abs(van_m) * 2, 100)
     fig.add_trace(go.Indicator(
         mode="gauge+number+delta",
-        value=round(van / 1e6, 1),
-        title={"text": f"VAN (M{devise})", "font": {"size": 13}},
-        delta={"reference": 0, "valueformat": ".0f"},
+        value=round(van_m, 1),
+        title={"text": f"VAN (M{devise})", "font": {"size": 12}},
+        delta={"reference": 0},
         gauge={
-            "axis"     : {"range": [min(van/1e6*2, -abs(van/1e6)), max(van/1e6*2, abs(van/1e6))]},
-            "bar"      : {"color": CLR["vert"] if van > 0 else CLR["rouge"]},
+            "axis" : {"range": [-van_range, van_range],
+                      "tickformat": ".0f"},
+            "bar"  : {"color": CLR["vert"] if van > 0 else CLR["rouge"]},
             "threshold": {"line": {"color": "black", "width": 2}, "value": 0},
         },
-        number={"suffix": f" M{devise}", "font": {"size": 16}},
+        number={"font": {"size": 18}},
     ), row=1, col=1)
 
+    # TRI vs WACC
     fig.add_trace(go.Indicator(
         mode="gauge+number",
-        value=round(tri * 100, 1) if tri else 0,
-        title={"text": "TRI (%)", "font": {"size": 13}},
+        value=round(tri_v, 1),
+        title={"text": "TRI (%)", "font": {"size": 12}},
         gauge={
-            "axis" : {"range": [0, 40]},
-            "bar"  : {"color": CLR["vert"] if tri and tri * 100 > wacc_val * 100 else CLR["rouge"]},
+            "axis" : {"range": [0, max(tri_v * 1.5, 30)]},
+            "bar"  : {"color": CLR["vert"] if tri_v > wacc_val * 100 else CLR["rouge"]},
             "steps": [
-                {"range": [0, wacc_val * 100], "color": "#f8d7da"},
-                {"range": [wacc_val * 100, 40], "color": "#d4edda"},
+                {"range": [0, wacc_val * 100], "color": "#fde8e8"},
+                {"range": [wacc_val * 100, max(tri_v * 1.5, 30)], "color": "#e6f4ea"},
             ],
-            "threshold": {"line": {"color": "navy", "width": 2}, "value": wacc_val * 100},
+            "threshold": {"line": {"color": "navy", "width": 2},
+                          "value": wacc_val * 100},
         },
-        number={"suffix": " %", "font": {"size": 16}},
+        number={"suffix": "%", "font": {"size": 18}},
     ), row=1, col=2)
 
+    # DSCR
     fig.add_trace(go.Indicator(
         mode="gauge+number",
-        value=dscr_v,
-        title={"text": "DSCR Min (x)", "font": {"size": 13}},
+        value=round(dscr_v, 2),
+        title={"text": "DSCR Min (x)", "font": {"size": 12}},
         gauge={
-            "axis" : {"range": [0, 3]},
-            "bar"  : {"color": CLR["vert"] if dscr_v >= 1.3 else (CLR["amber"] if dscr_v >= 1.0 else CLR["rouge"])},
+            "axis" : {"range": [0, max(dscr_v * 1.5, 2.5)]},
+            "bar"  : {"color": (CLR["vert"] if dscr_v >= 1.3
+                                else CLR["amber"] if dscr_v >= 1.0
+                                else CLR["rouge"])},
             "steps": [
-                {"range": [0, 1.0], "color": "#f8d7da"},
-                {"range": [1.0, 1.3], "color": "#fff3cd"},
-                {"range": [1.3, 3.0], "color": "#d4edda"},
+                {"range": [0, 1.0], "color": "#fde8e8"},
+                {"range": [1.0, 1.3], "color": "#fff8e1"},
+                {"range": [1.3, max(dscr_v * 1.5, 2.5)], "color": "#e6f4ea"},
             ],
             "threshold": {"line": {"color": "black", "width": 2}, "value": 1.3},
         },
-        number={"suffix": "x", "font": {"size": 16}},
+        number={"suffix": "x", "font": {"size": 18}},
     ), row=1, col=3)
 
-    fig.update_layout(height=240, margin=dict(l=20, r=20, t=40, b=10),
-                      paper_bgcolor="white")
-    return fig
-
-
-def fig_fcff_bar(rows, devise, facteur):
-    annees = [str(r["Annee"]) for r in rows]
-    vals   = [r["FCFF"] / 1e6 * facteur for r in rows]
-    cols   = [CLR["vert"] if v >= 0 else CLR["rouge"] for v in vals]
-    fig = go.Figure(go.Bar(
-        x=annees, y=vals, marker_color=cols,
-        text=[f"{v:.1f}" for v in vals], textposition="outside",
-    ))
-    fig.add_hline(y=0, line_color="#333", line_width=1)
     fig.update_layout(
-        title=f"FCFF Annuels (M{devise})",
-        xaxis_title="Année", yaxis_title=f"M{devise}",
-        plot_bgcolor="white", paper_bgcolor="white",
-        height=300, margin=dict(t=40, b=30), showlegend=False,
+        height=220,
+        margin=dict(l=10, r=10, t=30, b=5),
+        paper_bgcolor="white",
     )
     return fig
 
 
-def fig_revenus_couts(rows, devise, facteur):
-    annees = [str(r["Annee"]) for r in rows]
-    rev    = [r["Revenus"] / 1e6 * facteur for r in rows]
-    cout   = [r["Couts"]   / 1e6 * facteur for r in rows]
-    ebitda = [r["EBITDA"]  / 1e6 * facteur for r in rows]
-    fig = go.Figure()
-    fig.add_trace(go.Bar(x=annees, y=rev,    name="Revenus",  marker_color=CLR["bleu"], opacity=0.75))
-    fig.add_trace(go.Bar(x=annees, y=cout,   name="Coûts",    marker_color=CLR["amber"], opacity=0.75))
-    fig.add_trace(go.Scatter(x=annees, y=ebitda, name="EBITDA",
-                             line=dict(color=CLR["vert"], width=2.5), mode="lines+markers"))
-    fig.update_layout(
-        title=f"Revenus / Coûts / EBITDA (M{devise})",
-        barmode="group", xaxis_title="Année", yaxis_title=f"M{devise}",
-        plot_bgcolor="white", paper_bgcolor="white",
-        height=300, margin=dict(t=40, b=30),
-        legend=dict(orientation="h", y=-0.25),
-    )
-    return fig
-
-
-def fig_dscr(df_dette):
-    df_p   = df_dette[df_dette["DSCR"].notna()]
-    cols   = [CLR["vert"] if v >= 1.3 else (CLR["amber"] if v >= 1.0 else CLR["rouge"])
-              for v in df_p["DSCR"]]
-    fig = go.Figure(go.Bar(
-        x=df_p["Annee"].astype(str), y=df_p["DSCR"],
-        marker_color=cols,
-        text=[f"{v:.2f}x" for v in df_p["DSCR"]], textposition="outside",
-    ))
-    fig.add_hline(y=1.3, line_dash="dash", line_color=CLR["vert"],
-                  annotation_text="Seuil bancaire 1.3x", annotation_position="top right")
-    fig.add_hline(y=1.0, line_dash="dot",  line_color=CLR["rouge"],
-                  annotation_text="Défaut 1.0x", annotation_position="bottom right")
-    fig.update_layout(
-        title="DSCR Annuel",
-        xaxis_title="Année", yaxis_title="DSCR (x)",
-        plot_bgcolor="white", paper_bgcolor="white",
-        height=300, margin=dict(t=40, b=30), showlegend=False,
-    )
-    return fig
-
-
-def fig_stress_compare(stress, duree, devise, facteur):
+def fig_stress_sans_avec(stress, duree, devise, facteur):
     """
-    Graphique double axe : DSCR (ligne) + Trésorerie cumulée (aire).
-    3 scénarios : Base / Choc Sans Assurance / Choc Avec Assurance.
+    UN seul graphique, 2 sous-graphes verticaux :
+      Haut : DSCR annuel — 3 lignes (Base / Choc sans assurance / Choc avec assurance)
+      Bas  : Trésorerie cumulée — mêmes 3 scénarios en aire
+
+    Pas de courbe de probabilité. Lecture directe de l'impact de l'assurance.
     """
-    annees = list(range(1, duree + 1))
+    annees  = list(range(1, duree + 1))
     an_choc = stress["an_choc"]
 
-    def clean_dscr(lst):
-        return [v if isinstance(v, float) and not np.isnan(v) else None for v in lst]
+    def clean(lst):
+        return [v if (isinstance(v, float) and not np.isnan(v)) else None for v in lst]
 
     def treso(rows):
         return [r["Tresorerie_cum"] / 1e6 * facteur for r in rows]
 
     fig = make_subplots(
         rows=2, cols=1,
-        subplot_titles=("Impact sur le DSCR", "Trésorerie Cumulée"),
-        vertical_spacing=0.15,
+        subplot_titles=("DSCR annuel", f"Trésorerie cumulée (M{devise})"),
+        vertical_spacing=0.16,
+        row_heights=[0.5, 0.5],
     )
 
-    # — DSCR —
-    fig.add_trace(go.Scatter(
-        x=annees, y=clean_dscr(stress["base"]["dscr"]),
-        name="Base", mode="lines+markers",
-        line=dict(color=CLR["bleu"], width=2),
-    ), row=1, col=1)
-    fig.add_trace(go.Scatter(
-        x=annees, y=clean_dscr(stress["choc"]["dscr"]),
-        name="Choc — Sans Assurance", mode="lines+markers",
-        line=dict(color=CLR["rouge"], width=2.5, dash="dot"),
-        marker=dict(symbol="x", size=8),
-    ), row=1, col=1)
-    fig.add_trace(go.Scatter(
-        x=annees, y=clean_dscr(stress["assurance"]["dscr"]),
-        name="Choc — Avec Assurance", mode="lines+markers",
-        line=dict(color=CLR["vert"], width=2.5),
-        marker=dict(symbol="diamond", size=7),
-    ), row=1, col=1)
+    TRACES = [
+        ("Base (nominal)",          "base",      CLR["bleu"],  "solid",  None),
+        ("Choc — Sans Assurance",   "choc",      CLR["rouge"], "dot",    "x"),
+        ("Choc — Avec Assurance",   "assurance", CLR["vert"],  "solid",  "diamond"),
+    ]
+
+    for label, cle, couleur, dash, symbol in TRACES:
+        # DSCR
+        fig.add_trace(go.Scatter(
+            x=annees, y=clean(stress[cle]["dscr"]),
+            mode="lines+markers",
+            name=label,
+            line=dict(color=couleur, width=2, dash=dash),
+            marker=dict(size=6, symbol=symbol or "circle"),
+            legendgroup=label,
+        ), row=1, col=1)
+
+        # Trésorerie
+        fig.add_trace(go.Scatter(
+            x=annees, y=treso(stress[cle]["rows"]),
+            mode="lines",
+            name=label,
+            line=dict(color=couleur, width=2, dash=dash),
+            fill="tozeroy",
+            fillcolor=f"rgba({int(couleur[1:3],16)},{int(couleur[3:5],16)},{int(couleur[5:7],16)},0.08)",
+            legendgroup=label,
+            showlegend=False,
+        ), row=2, col=1)
 
     # Seuils DSCR
     fig.add_hline(y=1.3, line_dash="dash", line_color=CLR["vert"],
-                  annotation_text="1.3x", row=1, col=1)
-    fig.add_hline(y=1.0, line_dash="dot",  line_color=CLR["rouge"],
-                  annotation_text="1.0x", row=1, col=1)
+                  line_width=1.2,
+                  annotation_text="Seuil bancaire 1.3x",
+                  annotation_font_size=10,
+                  row=1, col=1)
+    fig.add_hline(y=1.0, line_dash="dot", line_color=CLR["rouge"],
+                  line_width=1.2,
+                  annotation_text="Défaut 1.0x",
+                  annotation_font_size=10,
+                  row=1, col=1)
 
-    # — Trésorerie —
-    fig.add_trace(go.Scatter(
-        x=annees, y=treso(stress["base"]["rows"]),
-        name="Base", mode="lines",
-        line=dict(color=CLR["bleu"], width=2),
-        fill="tozeroy", fillcolor="rgba(13,110,253,0.07)",
-        showlegend=False,
-    ), row=2, col=1)
-    fig.add_trace(go.Scatter(
-        x=annees, y=treso(stress["choc"]["rows"]),
-        name="Sans Assurance", mode="lines",
-        line=dict(color=CLR["rouge"], width=2.5, dash="dot"),
-        fill="tozeroy", fillcolor="rgba(220,53,69,0.07)",
-        showlegend=False,
-    ), row=2, col=1)
-    fig.add_trace(go.Scatter(
-        x=annees, y=treso(stress["assurance"]["rows"]),
-        name="Avec Assurance", mode="lines",
-        line=dict(color=CLR["vert"], width=2.5),
-        fill="tozeroy", fillcolor="rgba(25,135,84,0.07)",
-        showlegend=False,
-    ), row=2, col=1)
-
+    # Ligne zéro trésorerie
     fig.add_hline(y=0, line_color="#333", line_width=0.8, row=2, col=1)
 
-    # Zone choc
-    for row_n in [1, 2]:
+    # Zone de l'année du choc (les 2 sous-graphes)
+    for r_n in [1, 2]:
         fig.add_vrect(
             x0=an_choc - 0.45, x1=an_choc + 0.45,
             fillcolor="rgba(220,53,69,0.10)", line_width=0,
-            annotation_text="Choc", annotation_position="top left",
-            row=row_n, col=1,
+            annotation_text=f"Choc An {an_choc}",
+            annotation_position="top left",
+            annotation_font_size=9,
+            row=r_n, col=1,
         )
 
     fig.update_layout(
-        height=580,
-        plot_bgcolor="white", paper_bgcolor="white",
-        legend=dict(orientation="h", y=-0.12, x=0),
-        margin=dict(t=50, b=40),
-        yaxis2_title=f"M{devise}",
+        height=520,
+        plot_bgcolor="white",
+        paper_bgcolor="white",
+        margin=dict(t=50, b=20, l=10, r=10),
+        legend=dict(orientation="h", y=-0.08, x=0, font_size=11),
         yaxis_title="DSCR (x)",
-    )
-    return fig
-
-
-def fig_tornado_plotly(tdata, van_ref, devise, facteur):
-    labels = [d["Variable"] for d in tdata]
-    im     = [d["im"] / 1e6 * facteur for d in tdata]
-    ip     = [d["ip"] / 1e6 * facteur for d in tdata]
-    fig = go.Figure()
-    fig.add_trace(go.Bar(y=labels, x=im, orientation="h", name="-10%",
-                         marker_color=CLR["rouge"],
-                         text=[f"{v:+,.0f}" for v in im], textposition="outside"))
-    fig.add_trace(go.Bar(y=labels, x=ip, orientation="h", name="+10%",
-                         marker_color=CLR["vert"],
-                         text=[f"{v:+,.0f}" for v in ip], textposition="outside"))
-    fig.add_vline(x=0, line_color="#333", line_width=1)
-    fig.update_layout(
-        title=f"Tornado — Sensibilité VAN (base: {van_ref/1e6*facteur:,.0f} M{devise})",
-        xaxis_title=f"Impact sur VAN (M{devise})", barmode="overlay",
-        plot_bgcolor="white", paper_bgcolor="white",
-        height=300, margin=dict(t=40, b=30),
-        legend=dict(orientation="h", y=-0.25),
-    )
-    return fig
-
-
-def fig_heatmap(df_s, devise):
-    fig = go.Figure(go.Heatmap(
-        z=df_s.values.tolist(), x=df_s.columns.tolist(), y=df_s.index.tolist(),
-        colorscale=[[0, CLR["rouge"]], [0.5, "#ffffff"], [1, CLR["vert"]]],
-        text=[[f"{v:.0f}" for v in row] for row in df_s.values],
-        texttemplate="%{text}", showscale=True,
-        colorbar=dict(title=f"VAN M{devise}"),
-    ))
-    fig.update_layout(
-        title=f"Sensibilité Croisée VAN — Prix × Coût (M{devise})",
-        xaxis_title="Variation Coût", yaxis_title="Variation Prix",
-        height=320, margin=dict(t=40),
+        yaxis2_title=f"M{devise}",
     )
     return fig
 
@@ -745,88 +665,88 @@ st.set_page_config(
 
 st.markdown("""
 <style>
-    /* Global */
-    body { font-family: 'Inter', sans-serif; }
-    .block-container { padding: 1.4rem 2.5rem 2rem 2.5rem; }
-
-    /* Titres */
-    h1  { font-size:1.5rem; font-weight:700; color:#0d1117; margin-bottom:.2rem; }
-    h2  { font-size:1.05rem; font-weight:600; color:#24292f;
-          border-bottom:2px solid #e8e8e8; padding-bottom:4px; margin-top:1.5rem; }
-    h3  { font-size:.9rem; font-weight:600; color:#24292f; }
-
-    /* KPI cards */
-    .kpi-card {
-        background:#ffffff; border:1px solid #e0e0e0; border-radius:8px;
-        padding:14px 18px; text-align:center;
-    }
-    .kpi-val  { font-size:1.5rem; font-weight:700; line-height:1.2; }
-    .kpi-lab  { font-size:.72rem; color:#57606a; text-transform:uppercase;
-                letter-spacing:.05em; margin-top:2px; }
-    .kpi-delta{ font-size:.78rem; margin-top:4px; font-weight:500; }
-    .pos { color:#198754; } .neg { color:#dc3545; } .neu { color:#6c757d; }
+    .block-container { padding: 1.2rem 2rem 2rem 2rem; }
+    h1  { font-size: 1.45rem; font-weight: 700; color: #0d1117; }
+    h2  { font-size: 1.0rem;  font-weight: 600; color: #24292f;
+          border-bottom: 2px solid #e8e8e8; padding-bottom: 4px;
+          margin-top: 1.4rem; }
+    h3  { font-size: .88rem;  font-weight: 600; color: #24292f; }
+    .stMetric label { font-size: .72rem; color: #57606a;
+                      text-transform: uppercase; letter-spacing: .04em; }
+    hr  { border: none; border-top: 1px solid #e8e8e8; margin: 1rem 0; }
 
     /* Bandeau Business Model */
     .bm-banner {
-        background:linear-gradient(90deg,#0d6efd 0%,#0a58ca 100%);
-        color:white; border-radius:8px; padding:10px 20px;
-        font-size:.92rem; font-weight:600; margin-bottom:1rem;
+        background: linear-gradient(90deg, #0d6efd, #0a58ca);
+        color: white; border-radius: 8px; padding: 10px 20px;
+        font-size: .9rem; font-weight: 600; margin-bottom: .8rem;
     }
 
-    /* Sections */
-    .section-divider { border:none; border-top:1px solid #e8e8e8; margin:1.2rem 0; }
+    /* Score verdict */
+    .verdict-box {
+        border-radius: 8px; padding: 12px 20px;
+        font-size: 1.05rem; font-weight: 700;
+        text-align: center; color: white; margin-bottom: .6rem;
+    }
 
-    /* Sidebar */
-    .stMetric label { font-size:.75rem; color:#57606a; }
-    hr { border:none; border-top:1px solid #ddd; margin:12px 0; }
+    /* Tableau overview compact */
+    .overview-table { font-size: .82rem; }
 </style>
 """, unsafe_allow_html=True)
 
 
 # =============================================================================
-# BARRE LATÉRALE — INPUTS ADAPTATIFS
+# BARRE LATÉRALE
 # =============================================================================
 
 with st.sidebar:
-    st.markdown("### CommodityWatch")
-    st.caption("Overview Pré-Investissement v4.0")
+    st.markdown("### CommodityWatch v4.1")
+    st.caption("Overview Pré-Investissement")
     st.markdown("---")
 
-    # ── Devise ────────────────────────────────────────────────────────────────
     devise  = st.radio("Devise", ["FCFA", "USD"], horizontal=True)
-    facteur = 1.0 if devise == "FCFA" else 1 / TAUX_CHANGE
+    facteur = 1.0 if devise == "FCFA" else 1.0 / TAUX_CHANGE
 
-    # ── Business Model ────────────────────────────────────────────────────────
+    st.markdown("---")
     st.markdown("#### Type de Projet")
     bm = st.selectbox(
         "Business Model",
         ["Production", "Infrastructure", "Campagne"],
-        help=(
-            "Production : plantation/élevage — revenu lié à la récolte\n"
-            "Infrastructure : construction/extension d'usine\n"
-            "Campagne : achat matière, transformation, vente"
-        ),
     )
-    bm_info = BM_RISQUE[bm]
+    cfg = BM_CONFIG[bm]
+    st.caption(cfg["description"])
+
+    # Phase biologique (Production uniquement)
+    duree_bio = 0
+    if cfg["bio_actif"]:
+        duree_bio = st.number_input(
+            "Années sans revenu (croissance)", 0, 10, 3, 1,
+        )
+
+    # BFR (Campagne uniquement)
+    j_stock = j_clients = j_fourn = 0
+    if cfg["bfr_actif"]:
+        st.markdown("**Cycle d'Exploitation**")
+        j_stock   = st.number_input("Stock matière (jours)",    0, 180, 60, 5)
+        j_clients = st.number_input("Crédit clients (jours)",   0, 120, 30, 5)
+        j_fourn   = st.number_input("Crédit fournisseurs (j.)", 0, 120, 45, 5)
 
     st.markdown("---")
-
-    # ── Matière & Prix ────────────────────────────────────────────────────────
     st.markdown("#### Produit & Prix")
-    matiere = st.selectbox("Matière première", list(PRIX_REF_USD.keys()))
-    prix_ref_devise = (PRIX_REF_USD[matiere] if devise == "USD"
-                       else PRIX_REF_USD[matiere] * TAUX_CHANGE)
-    if matiere != "Personnalisé" and prix_ref_devise > 0:
-        st.info(f"Réf. marché : **{prix_ref_devise:,.0f} {devise}/T** (ICE/Euronext/OTC)")
 
-    prix_input = st.number_input(
+    matiere     = st.selectbox("Matière première", list(PRIX_REF_USD.keys()))
+    prix_ref    = PRIX_REF_USD[matiere] * (1 if devise == "USD" else TAUX_CHANGE)
+    if prix_ref > 0:
+        st.info(f"Réf. marché : **{prix_ref:,.0f} {devise}/T** (ICE/Euronext/OTC)")
+
+    prix_input  = st.number_input(
         f"Prix de Vente ({devise}/T)",
         min_value=0.0,
-        value=float(prix_ref_devise) if prix_ref_devise > 0 else (1_500.0 if devise == "USD" else 900_000.0),
+        value=float(prix_ref) if prix_ref > 0 else (1_500.0 if devise == "USD" else 900_000.0),
         step=10.0 if devise == "USD" else 10_000.0,
         format="%.1f" if devise == "USD" else "%.0f",
     )
-    prix_fcfa = en_fcfa(prix_input, devise)
+    prix_fcfa_v = fcfa(prix_input, devise)
 
     quantite = st.number_input("Volume pleine capacité (T/an)", 0, 500_000, 5_000, 100)
 
@@ -837,44 +757,25 @@ with st.sidebar:
         step=10.0 if devise == "USD" else 10_000.0,
         format="%.1f" if devise == "USD" else "%.0f",
     )
-    cout_fcfa = en_fcfa(cout_input, devise)
+    cout_fcfa_v = fcfa(cout_input, devise)
 
     st.markdown("---")
-
-    # ── Paramètres propres au Business Model ─────────────────────────────────
-    duree_bio   = 0
-    j_stock = j_clients = j_fourn = 0
-
-    if bm == "Production":
-        st.markdown("#### Phase Biologique")
-        duree_bio = st.number_input("Années sans revenu (croissance)", 0, 10, 3, 1)
-
-    if bm == "Campagne":
-        st.markdown("#### Cycle d'Exploitation (BFR)")
-        j_stock   = st.number_input("Stock matière (jours)", 0, 180, 60, 5)
-        j_clients = st.number_input("Crédit clients (jours)",  0, 120, 30, 5)
-        j_fourn   = st.number_input("Crédit fournisseurs (j)", 0, 120, 45, 5)
-
-    st.markdown("---")
-
-    # ── Ramp-up ───────────────────────────────────────────────────────────────
-    st.markdown("#### Montée en Puissance")
-    n_pal = int(st.number_input("Nombre de paliers", 1, 5, 3, 1))
-    d_an  = [2, 3, 4, 5, 6]
-    d_tx  = [0, 40, 80, 100, 100]
+    st.markdown("#### Montée en Puissance (Ramp-up)")
+    n_pal   = int(st.number_input("Paliers", 1, 5, 3, 1))
+    d_an_df = [2, 3, 4, 5, 6]
+    d_tx_df = [0, 40, 80, 100, 100]
     paliers = []
     for k in range(n_pal):
         c1, c2 = st.columns(2)
         with c1:
-            af = st.number_input(f"Fin an {k+1}", 1, 25, d_an[k], 1, key=f"an{k}")
+            af = st.number_input(f"Fin an", 1, 25, d_an_df[k], 1, key=f"an{k}")
         with c2:
-            tx = st.number_input("Taux %", 0, 100, d_tx[k], 5, key=f"tx{k}")
+            tx = st.number_input("%", 0, 100, d_tx_df[k], 5, key=f"tx{k}")
         paliers.append((int(af), tx / 100))
 
     st.markdown("---")
-
-    # ── Capital ───────────────────────────────────────────────────────────────
     st.markdown("#### Structure Financière")
+
     capex_input = st.number_input(
         f"CAPEX Total ({devise})",
         min_value=0.0,
@@ -882,9 +783,9 @@ with st.sidebar:
         step=100_000.0 if devise == "USD" else 100_000_000.0,
         format="%.0f",
     )
-    capex_fcfa = en_fcfa(capex_input, devise)
+    capex_fcfa_v = fcfa(capex_input, devise)
 
-    p_dette_pct = st.slider("Part dette (%)", 0, 100, 60, 5)
+    p_dette_pct = st.slider("Part dette (% CAPEX)", 0, 100, 60, 5)
     p_dette     = p_dette_pct / 100
     p_fp        = 1 - p_dette
     r_dette_pct = st.slider("Coût dette (%/an)", 1, 25, 9, 1)
@@ -898,49 +799,42 @@ with st.sidebar:
     inflation   = infl_pct / 100
 
     st.markdown("---")
-
-    # ── Dette avancée ─────────────────────────────────────────────────────────
     st.markdown("#### Paramètres du Prêt")
-    dur_dette   = st.slider("Durée du prêt (ans)", 1, duree, min(8, duree), 1)
-    grace       = st.slider("Différé remboursement (ans)", 0, max(0, dur_dette-1),
-                             min(2, dur_dette-1), 1)
+    dur_dette  = st.slider("Durée prêt (ans)",       1, duree, min(8, duree), 1)
+    grace      = st.slider("Différé remboursement (ans)", 0, max(0, dur_dette - 1),
+                            min(2, dur_dette - 1), 1)
     with st.expander("Commissions Bancaires"):
-        c_flat_pct    = st.slider("Commission Flat (%, prélevée une fois)", 0.0, 3.0, 0.5, 0.1)
-        c_engagt_pct  = st.slider("Commission Engagement (%/an)", 0.0, 2.0, 0.25, 0.05)
-    c_flat    = c_flat_pct   / 100
-    c_engagt  = c_engagt_pct / 100
-    profil_dec = [0.5, 0.5] + [0.0] * (duree - 2)   # décaissement 50/50 an1-an2
+        c_flat_pct   = st.slider("Commission Flat (%, prélevée une fois)", 0.0, 3.0, 0.5, 0.1)
+        c_engagt_pct = st.slider("Commission Engagement (%/an)", 0.0, 2.0, 0.25, 0.05)
+    c_flat   = c_flat_pct   / 100
+    c_engagt = c_engagt_pct / 100
+    profil_dec = [0.5, 0.5] + [0.0] * (duree - 2)
 
     st.markdown("---")
 
-    # ── Assurance (contextuelle) ──────────────────────────────────────────────
-    st.markdown(f"#### {bm_info['assurance_label']}")
-    st.caption(bm_info["description_assurance"])
+    # Assurance — label et défauts adaptés au Business Model
+    st.markdown(f"#### {cfg['assurance_titre']}")
+    st.caption(cfg["assurance_desc"])
 
-    prob_risque  = st.slider(
-        "Probabilité d'occurrence (%)", 1, 50,
-        int(bm_info["gravite_defaut"] * 100), 1,
-    ) / 100
-
-    gravite_risque = st.slider(
-        "Gravité — perte de CA (%)", 5, 80,
-        int(bm_info["gravite_defaut"] * 100), 5,
+    gravite = st.slider(
+        f"Gravité du sinistre — perte de CA (%)",
+        5, 80, int(cfg["gravite_defaut"] * 100), 5,
     ) / 100
 
     prime_input = st.number_input(
         f"Prime annuelle ({devise})",
         min_value=0.0,
         value=50_000.0 if devise == "USD" else 30_000_000.0,
-        step=5_000.0 if devise == "USD" else 5_000_000.0,
+        step=5_000.0  if devise == "USD" else 5_000_000.0,
         format="%.0f",
     )
-    prime_fcfa = en_fcfa(prime_input, devise)
+    prime_fcfa_v = fcfa(prime_input, devise)
 
-    indem_pct = st.slider("Taux de couverture (% perte indemnisé)", 0, 100, 70, 5) / 100
+    indem_pct = st.slider(
+        "Taux de couverture (% de la perte indemnisé)", 0, 100, 70, 5,
+    ) / 100
 
     st.markdown("---")
-
-    # ── Import Excel ──────────────────────────────────────────────────────────
     with st.expander("Importer Bilan / CdR Excel"):
         uploaded = st.file_uploader("Fichier .xlsx", type=["xlsx"])
         donnees_xl = {}
@@ -953,54 +847,38 @@ with st.sidebar:
                     st.success(f"{len(donnees_xl)} postes importés")
                     st.json(donnees_xl)
             else:
-                st.warning("Installez `openpyxl` pour activer l'import Excel.")
+                st.warning("Installez `openpyxl` pour l'import Excel.")
 
     st.markdown("---")
     lancer = st.button("Générer l'Overview", type="primary", use_container_width=True)
 
 
 # =============================================================================
-# ZONE PRINCIPALE
+# ZONE PRINCIPALE — HEADER
 # =============================================================================
 
-# ── Header ────────────────────────────────────────────────────────────────────
-bm_icons = {"Production": "🌱", "Infrastructure": "🏭", "Campagne": "🔄"}
 st.markdown(
-    f"<div class='bm-banner'>{bm_icons[bm]}  CommodityWatch — "
-    f"{matiere} &nbsp;|&nbsp; {bm} &nbsp;|&nbsp; {devise}</div>",
+    f"<div class='bm-banner'>"
+    f"{cfg['icon']}  CommodityWatch — {matiere} &nbsp;|&nbsp; "
+    f"{bm} &nbsp;|&nbsp; {devise}"
+    f"</div>",
     unsafe_allow_html=True,
 )
 st.caption(
-    "Overview pré-investissement à destination du promoteur et du comité de crédit bancaire. "
-    "Résultats indicatifs — ne se substituent pas à une due diligence complète."
+    "Overview pré-investissement — première lecture à chaud pour promoteur, "
+    "analyste et comité de crédit bancaire."
 )
 
 if not lancer:
-    # ── Écran d'accueil ───────────────────────────────────────────────────────
-    st.markdown("---")
     c1, c2, c3 = st.columns(3)
-    with c1:
-        st.markdown("""
-**Ce que vous allez obtenir :**
-- Indicateurs clés (VAN, TRI, DSCR, LLCR, Payback)
-- Projection des flux sur toute la durée du projet
-- Tableau de service de la dette avec alertes bancaires
-""")
-    with c2:
-        st.markdown(f"""
-**Analyse de sensibilité :**
-- Tornado Chart (4 variables clés)
-- Tableau croisé Prix × Coût
-- Identification du risque dominant
-""")
-    with c3:
-        st.markdown(f"""
-**Stress Test — {bm} :**
-- Risque : {bm_info['risque_label']}
-- Assurance : {bm_info['assurance_label']}
-- Comparatif Sans / Avec Assurance
-""")
-    st.info("Configurez les paramètres dans la barre latérale puis cliquez sur **Générer l'Overview**.")
+    c1.info(f"**{cfg['icon']} {bm}**\n\n{cfg['description']}")
+    c2.info(f"**Risque couvert**\n\n{cfg['risque_titre']}")
+    c3.info(f"**Assurance associée**\n\n{cfg['assurance_titre']}")
+    st.info(
+        "Renseignez les paramètres dans la barre latérale "
+        "puis cliquez sur **Générer l'Overview**.",
+        icon="👈",
+    )
     st.stop()
 
 
@@ -1009,399 +887,506 @@ if not lancer:
 # =============================================================================
 
 with st.spinner("Calcul en cours..."):
-    wacc_val   = r_dette * (1 - taux_is) * p_dette + r_fp * p_fp
-    rampup     = build_rampup(duree, paliers)
-    fcff_rows  = projeter_fcff(quantite, prix_fcfa, cout_fcfa, capex_fcfa,
-                               taux_is, inflation, duree, rampup, bm,
-                               duree_bio, j_stock, j_clients, j_fourn)
-    met        = metriques_rentabilite(fcff_rows, capex_fcfa, wacc_val)
+    wacc_val  = r_dette * (1 - taux_is) * p_dette + r_fp * p_fp
+    rampup    = build_rampup(duree, paliers)
+
+    fcff_rows = projeter_fcff(
+        quantite, prix_fcfa_v, cout_fcfa_v, capex_fcfa_v,
+        taux_is, inflation, duree, rampup, bm,
+        duree_bio, j_stock, j_clients, j_fourn,
+    )
+
+    met = metriques(fcff_rows, capex_fcfa_v, wacc_val)
+
     df_dette, dscr_min, dscr_moy, llcr_g, cout_total_dette = service_dette(
-        fcff_rows, capex_fcfa, p_dette, r_dette, dur_dette,
+        fcff_rows, capex_fcfa_v, p_dette, r_dette, dur_dette,
         grace, wacc_val, c_flat, c_engagt, profil_dec,
     )
+
     alertes_chg = [r["Annee"] for r in fcff_rows
-                   if not np.isnan(r["Ratio Charges"]) and r["Ratio Charges"] > SEUIL_CHARGES_CA]
+                   if not np.isnan(r["Ratio_Charges"])
+                   and r["Ratio_Charges"] > SEUIL_CHARGES]
+
     tornado_d, van_ref_t = calc_tornado(
-        quantite, prix_fcfa, cout_fcfa, capex_fcfa, taux_is, inflation,
-        duree, rampup, bm, wacc_val, duree_bio, j_stock, j_clients, j_fourn,
+        quantite, prix_fcfa_v, cout_fcfa_v, capex_fcfa_v,
+        taux_is, inflation, duree, rampup, bm, wacc_val,
+        duree_bio, j_stock, j_clients, j_fourn,
     )
+
     df_sens = calc_sensibilite(
-        quantite, prix_fcfa, cout_fcfa, capex_fcfa, taux_is, inflation,
-        duree, rampup, bm, wacc_val, duree_bio, j_stock, j_clients, j_fourn,
+        quantite, prix_fcfa_v, cout_fcfa_v, capex_fcfa_v,
+        taux_is, inflation, duree, rampup, bm, wacc_val,
+        duree_bio, j_stock, j_clients, j_fourn,
     ) * facteur / 1e6
 
     stress = stress_test(
-        fcff_rows, bm, prob_risque, gravite_risque,
-        prime_fcfa, indem_pct,
-        capex_fcfa, p_dette, r_dette, dur_dette,
+        fcff_rows, gravite, prime_fcfa_v, indem_pct,
+        capex_fcfa_v, p_dette, r_dette, dur_dette,
         grace, wacc_val, c_flat, c_engagt, profil_dec,
     )
 
 
 # =============================================================================
-# SECTION A — OVERVIEW JAUGES
+# SECTION 1 — VERDICT GLOBAL + JAUGES
 # =============================================================================
 
-van_v   = met["van"]
-tri_v   = met["tri"]
-pb_v    = met["payback"]
+van_v  = met["van"]
+tri_v  = met["tri"]
+pb_v   = met["payback"]
 
-st.markdown("## Vue d'Ensemble — Indicateurs Clés")
-st.plotly_chart(
-    fig_overview_kpis(van_v, tri_v, wacc_val, dscr_min, llcr_g, pb_v, devise),
-    use_container_width=True,
-)
+score = sum([
+    van_v > 0,
+    (tri_v or 0) > wacc_val,
+    not np.isnan(dscr_min) and dscr_min >= SEUIL_BANCAIRE,
+    not np.isnan(llcr_g)   and llcr_g   >= 1.10,
+])
 
-# ── KPIs textuels ─────────────────────────────────────────────────────────────
-k1, k2, k3, k4, k5, k6 = st.columns(6)
-
-def kpi_card(col, valeur, label, delta_txt, delta_ok):
-    col.markdown(
-        f"<div class='kpi-card'>"
-        f"<div class='kpi-val'>{valeur}</div>"
-        f"<div class='kpi-lab'>{label}</div>"
-        f"<div class='kpi-delta {'pos' if delta_ok else 'neg'}'>{delta_txt}</div>"
-        f"</div>",
-        unsafe_allow_html=True,
-    )
-
-van_aff  = fmt(van_v  / 1e6 * facteur, devise)
-tri_aff  = f"{tri_v*100:.2f} %" if tri_v else "N/D"
-pb_aff   = f"{pb_v} ans" if pb_v else "> Durée"
-llcr_aff = f"{llcr_g:.2f}x" if not np.isnan(llcr_g) else "N/D"
-capex_aff = fmt(capex_fcfa / 1e6 * facteur, devise, dec=0)
-cout_d_aff = fmt(cout_total_dette / 1e6 * facteur, devise)
-
-kpi_card(k1, van_aff,   "VAN",             "Positive" if van_v > 0 else "Négative",   van_v > 0)
-kpi_card(k2, tri_aff,   "TRI",             f"vs WACC {wacc_val*100:.2f}%", (tri_v or 0) > wacc_val)
-kpi_card(k3, f"{dscr_min:.2f}x", "DSCR Min", "Bancable ≥ 1.3x" if dscr_min >= 1.3 else "< Seuil 1.3x", dscr_min >= 1.3)
-kpi_card(k4, llcr_aff,  "LLCR",            "≥ 1.1x" if not np.isnan(llcr_g) and llcr_g >= 1.1 else "< 1.1x", not np.isnan(llcr_g) and llcr_g >= 1.1)
-kpi_card(k5, pb_aff,    "Payback",         f"CAPEX {capex_aff}", True)
-kpi_card(k6, cout_d_aff,"Coût Total Dette", "Commissions incluses", True)
-
-st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-# ── Alertes immédiates ────────────────────────────────────────────────────────
-if alertes_chg:
-    st.warning(
-        f"**Alerte Charges / CA > {SEUIL_CHARGES_CA*100:.0f}%** "
-        f"aux années {alertes_chg}. Les coûts opérationnels pèsent trop sur le chiffre d'affaires.",
-        icon="⚠️",
-    )
-if not np.isnan(dscr_min) and dscr_min < SEUIL_DSCR_ALERTE:
-    lvl = "error" if dscr_min < SEUIL_DSCR_DEFAUT else "warning"
-    msg = (f"**DSCR Min = {dscr_min:.2f}x** — "
-           + ("Risque de défaut de paiement." if dscr_min < 1.0
-              else "En dessous du seuil bancaire 1.3x. Renégocier la structure de dette."))
-    if lvl == "error":
-        st.error(msg, icon="🚨")
-    else:
-        st.warning(msg, icon="⚠️")
-
-
-# =============================================================================
-# SECTION B — REVENUS / COÛTS / FCFF
-# =============================================================================
-
-st.markdown("## Projection Financière")
-tab_graph, tab_table = st.tabs(["Graphiques", "Tableau Détaillé"])
-
-with tab_graph:
-    g1, g2 = st.columns(2)
-    with g1:
-        st.plotly_chart(fig_revenus_couts(fcff_rows, devise, facteur), use_container_width=True)
-    with g2:
-        st.plotly_chart(fig_fcff_bar(fcff_rows, devise, facteur), use_container_width=True)
-
-with tab_table:
-    # Construction du tableau d'affichage
-    df_fcff = pd.DataFrame([{
-        "An"            : r["Annee"],
-        "Ramp-up"       : f"{r['Ramp-up']:.0f}%",
-        f"Revenus M{devise}"  : round(r["Revenus"]   / 1e6 * facteur, 2),
-        f"Coûts M{devise}"    : round(r["Couts"]     / 1e6 * facteur, 2),
-        f"EBITDA M{devise}"   : round(r["EBITDA"]    / 1e6 * facteur, 2),
-        "Chg/CA"        : f"{r['Ratio Charges']*100:.1f}%" if not np.isnan(r["Ratio Charges"]) else "—",
-        f"FCFF M{devise}"     : round(r["FCFF"]      / 1e6 * facteur, 2),
-    } for r in fcff_rows])
-
-    def style_fcff_row(row):
-        fcff_col = f"FCFF M{devise}"
-        chg_col  = "Chg/CA"
-        fcff_v   = row.get(fcff_col, 0)
-        chg_s    = row.get(chg_col, "0%")
-        try:
-            chg_v = float(str(chg_s).replace("%", "")) / 100
-        except:
-            chg_v = 0
-        if fcff_v < 0:
-            return ["background:#f8d7da"] * len(row)
-        if chg_v > SEUIL_CHARGES_CA:
-            return ["background:#fff3cd"] * len(row)
-        return [""] * len(row)
-
-    st.dataframe(
-        df_fcff.style.apply(style_fcff_row, axis=1),
-        use_container_width=True, hide_index=True,
-    )
-    st.caption("🟡 Charges > 55% CA &nbsp;&nbsp; 🔴 FCFF négatif")
-
-st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-
-# =============================================================================
-# SECTION C — SERVICE DE LA DETTE
-# =============================================================================
-
-st.markdown("## Bancabilité — Service de la Dette & DSCR")
-st.caption(
-    f"Grace Period : {grace} an(s) | Durée prêt : {dur_dette} ans | "
-    f"Comm. Flat : {c_flat_pct:.1f}% | Comm. Engagement : {c_engagt_pct:.2f}%/an"
-)
-
-cd1, cd2 = st.columns([1, 1])
-
-with cd1:
-    cols_show = [c for c in df_dette.columns if c != "Grace"]
-    df_d_aff  = df_dette[cols_show].copy()
-    for col_m in ["Encours", "Interets", "Remb Capital", "Comm Engagt", "Service", "FCFF"]:
-        df_d_aff[col_m] = (df_dette[col_m] / 1e6 * facteur).round(2)
-
-    def style_dette_row(row):
-        an       = row["Annee"]
-        is_grace = df_dette.loc[df_dette["Annee"] == an, "Grace"].values
-        is_grace = bool(is_grace[0]) if len(is_grace) else False
-        if is_grace:
-            return ["background:#fff3cd;color:#856404"] * len(row)
-        dscr_v = row.get("DSCR", np.nan)
-        if pd.notna(dscr_v):
-            if dscr_v < 1.0:  return ["background:#f8d7da;color:#721c24"] * len(row)
-            if dscr_v < 1.3:  return ["background:#fde8c8;color:#7d4e0f"] * len(row)
-            return ["background:#d4edda;color:#155724"] * len(row)
-        return [""] * len(row)
-
-    st.dataframe(
-        df_d_aff.style.apply(style_dette_row, axis=1).format({
-            "DSCR": lambda x: f"{x:.2f}x" if pd.notna(x) else "—",
-            "LLCR": lambda x: f"{x:.2f}x" if pd.notna(x) else "—",
-            **{c: "{:.2f}" for c in ["Encours","Interets","Remb Capital",
-                                      "Comm Engagt","Service","FCFF"]},
-        }),
-        use_container_width=True, hide_index=True,
-    )
-    la, lb, lc, ld = st.columns(4)
-    la.markdown("<span style='background:#d4edda;padding:1px 6px;border-radius:3px;font-size:.75rem'>≥ 1.3x</span>", unsafe_allow_html=True)
-    lb.markdown("<span style='background:#fde8c8;padding:1px 6px;border-radius:3px;font-size:.75rem'>1.0–1.3x</span>", unsafe_allow_html=True)
-    lc.markdown("<span style='background:#f8d7da;padding:1px 6px;border-radius:3px;font-size:.75rem'>< 1.0x Défaut</span>", unsafe_allow_html=True)
-    ld.markdown("<span style='background:#fff3cd;padding:1px 6px;border-radius:3px;font-size:.75rem'>Grace Period</span>", unsafe_allow_html=True)
-
-with cd2:
-    st.plotly_chart(fig_dscr(df_dette), use_container_width=True)
-
-st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-
-# =============================================================================
-# SECTION D — SENSIBILITÉ
-# =============================================================================
-
-st.markdown("## Analyse de Sensibilité")
-st_tab1, st_tab2 = st.tabs(["Tornado Chart", "Tableau Croisé Prix × Coût"])
-
-with st_tab1:
-    st_c1, st_c2 = st.columns([2, 1])
-    with st_c1:
-        st.plotly_chart(
-            fig_tornado_plotly(tornado_d, van_ref_t, devise, facteur),
-            use_container_width=True,
-        )
-    with st_c2:
-        st.markdown(f"#### Impacts sur VAN (M{devise})")
-        df_t = pd.DataFrame([{
-            "Variable"   : d["Variable"],
-            "-10%"       : f"{d['im']/1e6*facteur:+,.0f}",
-            "+10%"       : f"{d['ip']/1e6*facteur:+,.0f}",
-            "Amplitude"  : f"{d['amp']/1e6*facteur:,.0f}",
-        } for d in tornado_d])
-        st.dataframe(df_t, use_container_width=True, hide_index=True)
-        st.caption("Variable la plus impactante = levier de négociation prioritaire.")
-
-with st_tab2:
-    st.plotly_chart(fig_heatmap(df_sens, devise), use_container_width=True)
-
-st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-
-# =============================================================================
-# SECTION E — STRESS TEST CONTEXTUEL & ASSURANCE
-# =============================================================================
-
-st.markdown(f"## Stress Test — {bm_info['risque_label']}")
-
-# ── Contexte ──────────────────────────────────────────────────────────────────
-st.info(
-    f"**Risque identifié :** {bm_info['description_risque']}\n\n"
-    f"**Couverture proposée :** {bm_info['assurance_label']} — "
-    f"{bm_info['description_assurance']}",
-    icon="ℹ️",
-)
-
-# ── Synthèse financière du stress ─────────────────────────────────────────────
-perte_aff   = fmt(stress["perte_brute"]  / 1e6 * facteur, devise)
-indem_aff   = fmt(stress["indemnite"]    / 1e6 * facteur, devise)
-primes_aff  = fmt(stress["cout_primes"]  / 1e6 * facteur, devise)
-gain_aff    = fmt(abs(stress["gain_net_ass"]) / 1e6 * facteur, devise)
-gain_pos    = stress["gain_net_ass"] > 0
-
-sm1, sm2, sm3, sm4, sm5 = st.columns(5)
-sm1.metric("Année du Choc",     f"Année {stress['an_choc']}")
-sm2.metric("Perte CA (choc)",   perte_aff, delta=f"Gravité {gravite_risque*100:.0f}%", delta_color="inverse")
-sm3.metric("Indemnité Assurance",indem_aff, delta=f"Couv. {indem_pct*100:.0f}%", delta_color="normal")
-sm4.metric("Coût Total Primes", primes_aff, delta=f"{duree} années", delta_color="off")
-sm5.metric("Gain Net Assurance", gain_aff,
-           delta="Assurance rentable" if gain_pos else "Assurance coûteuse",
-           delta_color="normal" if gain_pos else "inverse")
-
-# ── DSCR Min comparatif ───────────────────────────────────────────────────────
-d_base  = stress["base"]["dscr_min"]
-d_choc  = stress["choc"]["dscr_min"]
-d_assur = stress["assurance"]["dscr_min"]
-
-sc1, sc2, sc3 = st.columns(3)
-sc1.metric("DSCR Min — Base",       f"{d_base:.2f}x"  if not np.isnan(d_base)  else "N/D",
-           delta="Référence", delta_color="off")
-sc2.metric("DSCR Min — Sans Assurance", f"{d_choc:.2f}x" if not np.isnan(d_choc) else "N/D",
-           delta=f"{d_choc - d_base:+.2f}x vs Base" if not np.isnan(d_choc) else "",
-           delta_color="normal" if d_choc >= d_base else "inverse")
-sc3.metric("DSCR Min — Avec Assurance", f"{d_assur:.2f}x" if not np.isnan(d_assur) else "N/D",
-           delta=f"{d_assur - d_choc:+.2f}x vs Choc" if not np.isnan(d_assur) else "",
-           delta_color="normal" if d_assur >= d_choc else "inverse")
-
-# ── Graphique principal ───────────────────────────────────────────────────────
-st.plotly_chart(
-    fig_stress_compare(stress, duree, devise, facteur),
-    use_container_width=True,
-)
-
-# ── Interprétation automatique ────────────────────────────────────────────────
-st.markdown("#### Lecture du Résultat")
-interp_lines = []
-
-if not np.isnan(d_choc) and d_choc < SEUIL_DSCR_DEFAUT:
-    interp_lines.append(
-        f"Sans assurance, le choc ramène le DSCR à **{d_choc:.2f}x**, "
-        "en dessous du seuil de défaut (1.0x). Le projet ne peut pas honorer sa dette cette année-là."
-    )
-elif not np.isnan(d_choc) and d_choc < SEUIL_DSCR_ALERTE:
-    interp_lines.append(
-        f"Sans assurance, le DSCR descend à **{d_choc:.2f}x**, "
-        "en dessous du seuil bancaire (1.3x). La banque exigera probablement un covenant de réserve."
-    )
-else:
-    interp_lines.append(
-        f"Même sans assurance, le DSCR reste à **{d_choc:.2f}x** — "
-        "le projet absorbe le choc sans défaut. La couverture d'assurance est une précaution supplémentaire."
-    )
-
-if not np.isnan(d_assur):
-    if d_assur >= SEUIL_DSCR_ALERTE:
-        interp_lines.append(
-            f"Avec l'{bm_info['assurance_label']}, le DSCR remonte à **{d_assur:.2f}x** "
-            f"(au-dessus du seuil 1.3x). L'assurance restaure la bancabilité du projet."
-        )
-    else:
-        interp_lines.append(
-            f"Avec assurance, le DSCR est à **{d_assur:.2f}x** — "
-            "l'assurance améliore la situation mais ne suffit pas seule à restaurer le seuil bancaire. "
-            "Envisager une reserve de liquidité complémentaire."
-        )
-
-if gain_pos:
-    interp_lines.append(
-        f"Financièrement, l'assurance est **rentable** sur la durée du projet : "
-        f"indemnité attendue ({indem_aff}) > coût total des primes ({primes_aff}), "
-        f"soit un gain net de {gain_aff}."
-    )
-else:
-    interp_lines.append(
-        f"Les primes cumulées ({primes_aff}) dépassent l'indemnité unique ({indem_aff}). "
-        "L'assurance est un coût de tranquillité pour la banque, pas un gain financier net — "
-        "ce qui est normal pour des sinistres rares."
-    )
-
-for line in interp_lines:
-    st.markdown(f"- {line}")
-
-st.markdown("<hr class='section-divider'>", unsafe_allow_html=True)
-
-
-# =============================================================================
-# SECTION F — FICHE SYNTHÈSE (RÉSUMÉ EXÉCUTIF)
-# =============================================================================
-
-st.markdown("## Fiche Synthèse — Résumé Exécutif")
-
-verdict_van  = "FAVORABLE" if van_v > 0 else "DÉFAVORABLE"
-verdict_tri  = "FAVORABLE" if (tri_v or 0) > wacc_val else "INSUFFISANT"
-verdict_dscr = "BANCABLE" if dscr_min >= 1.3 else ("À RISQUE" if dscr_min >= 1.0 else "EN DÉFAUT")
-score = sum([van_v > 0, (tri_v or 0) > wacc_val, dscr_min >= 1.3, not np.isnan(llcr_g) and llcr_g >= 1.1])
-
-couleur_score = CLR["vert"] if score >= 3 else (CLR["amber"] if score == 2 else CLR["rouge"])
-verdict_global = "PROJET VIABLE" if score >= 3 else ("PROJET À AMÉLIORER" if score == 2 else "PROJET RISQUÉ")
+VERDICTS = {
+    4: ("#198754", "PROJET VIABLE — 4/4 critères satisfaits"),
+    3: ("#198754", "PROJET FAVORABLE — 3/4 critères satisfaits"),
+    2: ("#fd7e14", "PROJET À AMÉLIORER — 2/4 critères satisfaits"),
+    1: ("#dc3545", "PROJET RISQUÉ — 1/4 critères satisfaits"),
+    0: ("#dc3545", "PROJET NON VIABLE — aucun critère satisfait"),
+}
+v_couleur, v_texte = VERDICTS[score]
 
 st.markdown(
-    f"<div style='background:{couleur_score};color:white;border-radius:8px;"
-    f"padding:14px 24px;font-size:1.1rem;font-weight:700;text-align:center;'>"
-    f"Score : {score}/4 — {verdict_global}</div>",
+    f"<div class='verdict-box' style='background:{v_couleur}'>{v_texte}</div>",
     unsafe_allow_html=True,
 )
 
-st.markdown("")
+# Jauges
+st.plotly_chart(
+    fig_jauges(van_v, tri_v, wacc_val, dscr_min, devise),
+    use_container_width=True,
+)
 
-f1, f2 = st.columns(2)
-with f1:
-    st.markdown(f"""
-**Rentabilité**
-| Indicateur | Valeur | Verdict |
-|---|---|---|
-| VAN | {van_aff} | {verdict_van} |
-| TRI | {tri_aff} | {verdict_tri} |
-| WACC | {wacc_val*100:.2f}% | Taux plancher |
-| Payback | {pb_aff} | — |
+# Alertes immédiates
+if alertes_chg:
+    st.warning(
+        f"Charges opérationnelles > {SEUIL_CHARGES*100:.0f}% du CA "
+        f"aux années **{alertes_chg}**.",
+        icon="⚠️",
+    )
+if not np.isnan(dscr_min):
+    if dscr_min < SEUIL_DEFAUT:
+        st.error(
+            f"DSCR Min = **{dscr_min:.2f}x** — Risque de défaut de paiement. "
+            "Le projet ne peut pas honorer son service de dette dans le scénario de base.",
+            icon="🚨",
+        )
+    elif dscr_min < SEUIL_BANCAIRE:
+        st.warning(
+            f"DSCR Min = **{dscr_min:.2f}x** — En dessous du seuil bancaire standard (1.3x). "
+            "Renégocier la maturité ou la franchise.",
+            icon="⚠️",
+        )
 
-**Structure Financière**
-| Poste | Valeur |
-|---|---|
-| CAPEX Total | {capex_aff} |
-| Dette ({p_dette_pct}%) | {fmt(capex_fcfa*p_dette/1e6*facteur, devise, dec=0)} |
-| Fonds Propres ({100-p_dette_pct}%) | {fmt(capex_fcfa*p_fp/1e6*facteur, devise, dec=0)} |
-| Coût Total Dette | {cout_d_aff} |
-""")
+st.markdown("---")
 
-with f2:
-    st.markdown(f"""
-**Bancabilité**
-| Indicateur | Valeur | Verdict |
-|---|---|---|
-| DSCR Min | {dscr_min:.2f}x | {verdict_dscr} |
-| DSCR Moyen | {dscr_moy:.2f}x | — |
-| LLCR | {llcr_aff} | — |
-| Grace Period | {grace} an(s) | — |
 
-**Risque & Assurance ({bm})**
-| Élément | Valeur |
-|---|---|
-| Risque identifié | {bm_info['risque_label'][:40]}... |
-| DSCR sans assurance (choc) | {d_choc:.2f}x |
-| DSCR avec assurance (choc) | {d_assur:.2f}x |
-| Couverture recommandée | {bm_info['assurance_label'][:35]} |
-""")
+# =============================================================================
+# SECTION 2 — TABLEAU OVERVIEW (tout sur un seul tableau synthétique)
+# =============================================================================
+
+st.markdown("## Tableau de Synthèse")
+
+def v(val_fcfa, dec=1):
+    """Valeur convertie pour affichage en M devise."""
+    return round(affiche(val_fcfa, devise) / 1e6, dec)
+
+# Couleur indicateur
+def ind(ok):
+    return "✅" if ok else "❌"
+
+capex_a = v(capex_fcfa_v, 0)
+dette_a = v(capex_fcfa_v * p_dette, 0)
+fp_a    = v(capex_fcfa_v * p_fp, 0)
+van_a   = v(van_v)
+tri_a   = f"{tri_v*100:.2f}%" if tri_v else "N/D"
+pb_a    = f"{pb_v} ans" if pb_v else "> durée"
+cd_a    = v(cout_total_dette)
+
+data_synthese = {
+    "Rubrique": [
+        "─── RENTABILITÉ ───",
+        "Valeur Actuelle Nette (VAN)",
+        "Taux de Rendement Interne (TRI)",
+        "Coût Moyen Pondéré (WACC)",
+        "Délai de Récupération (Payback)",
+        "",
+        "─── FINANCEMENT ───",
+        f"CAPEX Total",
+        f"Dont Dette ({p_dette_pct}%)",
+        f"Dont Fonds Propres ({100-p_dette_pct}%)",
+        "Coût Total de la Dette",
+        "Durée du Prêt / Différé",
+        "",
+        "─── BANCABILITÉ ───",
+        "DSCR Minimum",
+        "DSCR Moyen",
+        "LLCR",
+        "",
+        "─── RISQUE & ASSURANCE ───",
+        "Risque identifié",
+        "Perte CA en cas de sinistre",
+        "Indemnité estimée",
+        "Coût cumulé des primes",
+        "Gain net de l'assurance",
+    ],
+    "Valeur": [
+        "",
+        f"{van_a:,.1f} M{devise}",
+        tri_a,
+        f"{wacc_val*100:.2f}%",
+        pb_a,
+        "",
+        "",
+        f"{capex_a:,.0f} M{devise}",
+        f"{dette_a:,.0f} M{devise}",
+        f"{fp_a:,.0f} M{devise}",
+        f"{cd_a:,.1f} M{devise}",
+        f"{dur_dette} ans / {grace} an(s)",
+        "",
+        "",
+        f"{dscr_min:.2f}x" if not np.isnan(dscr_min) else "N/D",
+        f"{dscr_moy:.2f}x" if not np.isnan(dscr_moy) else "N/D",
+        f"{llcr_g:.2f}x"   if not np.isnan(llcr_g)   else "N/D",
+        "",
+        "",
+        cfg["risque_titre"],
+        f"{v(stress['perte_brute']):.1f} M{devise}",
+        f"{v(stress['indemnite']):.1f} M{devise}",
+        f"{v(stress['cout_primes']):.1f} M{devise}",
+        f"{v(stress['gain_net']):.1f} M{devise}",
+    ],
+    "Verdict": [
+        "", ind(van_v > 0), ind((tri_v or 0) > wacc_val),
+        "─", "─",
+        "",
+        "", "─", "─", "─", "─", "─",
+        "",
+        "",
+        ind(not np.isnan(dscr_min) and dscr_min >= 1.3),
+        ind(not np.isnan(dscr_moy) and dscr_moy >= 1.3),
+        ind(not np.isnan(llcr_g)   and llcr_g   >= 1.1),
+        "",
+        "",
+        "─",
+        "─",
+        "─",
+        "─",
+        ind(stress["gain_net"] > 0),
+    ],
+}
+
+df_synth = pd.DataFrame(data_synthese)
+
+def style_synthese(row):
+    if str(row["Rubrique"]).startswith("───"):
+        return ["background:#f0f4f8;font-weight:700;color:#0d1117"] * len(row)
+    if row["Rubrique"] == "":
+        return ["background:white;border:none"] * len(row)
+    return [""] * len(row)
+
+st.dataframe(
+    df_synth.style.apply(style_synthese, axis=1),
+    use_container_width=True,
+    hide_index=True,
+    height=680,
+)
+
+st.markdown("---")
+
+
+# =============================================================================
+# SECTION 3 — PROJECTION FCFF (tableau compact)
+# =============================================================================
+
+st.markdown("## Projection des Flux de Trésorerie")
+
+# Tableau
+df_proj = pd.DataFrame([{
+    "An"                   : r["Annee"],
+    "Cap. (%)"             : f"{r['Ramp_up']:.0f}%",
+    f"Revenus M{devise}"   : round(affiche(r["Revenus"],  devise) / 1e6, 2),
+    f"Coûts M{devise}"     : round(affiche(r["Couts"],    devise) / 1e6, 2),
+    f"EBITDA M{devise}"    : round(affiche(r["EBITDA"],   devise) / 1e6, 2),
+    "Chg/CA"               : f"{r['Ratio_Charges']*100:.1f}%" if not np.isnan(r["Ratio_Charges"]) else "—",
+    f"FCFF M{devise}"      : round(affiche(r["FCFF"],     devise) / 1e6, 2),
+} for r in fcff_rows])
+
+def style_proj(row):
+    fcff_col = f"FCFF M{devise}"
+    chg_col  = "Chg/CA"
+    fcff_v   = row.get(fcff_col, 0)
+    try:
+        chg_v = float(str(row.get(chg_col, "0%")).replace("%", "")) / 100
+    except:
+        chg_v = 0
+    if fcff_v < 0:
+        return ["background:#f8d7da"] * len(row)
+    if chg_v > SEUIL_CHARGES:
+        return ["background:#fff3cd"] * len(row)
+    return [""] * len(row)
+
+st.dataframe(
+    df_proj.style.apply(style_proj, axis=1),
+    use_container_width=True, hide_index=True,
+)
+st.caption("🟡 Charges > 55% CA &nbsp;&nbsp; 🔴 FCFF négatif")
+
+st.markdown("---")
+
+
+# =============================================================================
+# SECTION 4 — SERVICE DE LA DETTE (tableau bancaire)
+# =============================================================================
+
+st.markdown("## Service de la Dette & Bancabilité")
+st.caption(
+    f"Grace Period : **{grace} an(s)** | Durée prêt : **{dur_dette} ans** | "
+    f"Comm. Flat : **{c_flat_pct:.1f}%** | Comm. Engagement : **{c_engagt_pct:.2f}%/an**"
+)
+
+cols_show = [c for c in df_dette.columns if c != "Grace"]
+df_d      = df_dette[cols_show].copy()
+for col_m in ["Encours", "Interets", "Remb_Capital", "Comm_Engagt", "Service", "FCFF"]:
+    df_d[col_m] = (df_dette[col_m] / 1e6 * facteur).round(2)
+
+def style_dette(row):
+    an       = row["Annee"]
+    is_grace = df_dette.loc[df_dette["Annee"] == an, "Grace"].values
+    is_grace = bool(is_grace[0]) if len(is_grace) else False
+    if is_grace:
+        return ["background:#fff3cd;color:#856404"] * len(row)
+    dscr_v = row.get("DSCR", np.nan)
+    if pd.notna(dscr_v):
+        if dscr_v < 1.0:  return ["background:#f8d7da;color:#721c24"] * len(row)
+        if dscr_v < 1.3:  return ["background:#fde8c8;color:#7d4e0f"] * len(row)
+        return ["background:#d4edda;color:#155724"] * len(row)
+    return [""] * len(row)
+
+st.dataframe(
+    df_d.style.apply(style_dette, axis=1).format({
+        "DSCR": lambda x: f"{x:.2f}x" if pd.notna(x) else "—",
+        "LLCR": lambda x: f"{x:.2f}x" if pd.notna(x) else "—",
+        **{c: "{:.2f}" for c in ["Encours","Interets","Remb_Capital",
+                                   "Comm_Engagt","Service","FCFF"]},
+    }),
+    use_container_width=True, hide_index=True,
+)
+la, lb, lc, ld = st.columns(4)
+la.markdown("<span style='background:#d4edda;padding:1px 7px;border-radius:3px;font-size:.76rem'>DSCR ≥ 1.3x</span>", unsafe_allow_html=True)
+lb.markdown("<span style='background:#fde8c8;padding:1px 7px;border-radius:3px;font-size:.76rem'>1.0 – 1.3x</span>", unsafe_allow_html=True)
+lc.markdown("<span style='background:#f8d7da;padding:1px 7px;border-radius:3px;font-size:.76rem'>< 1.0x Défaut</span>", unsafe_allow_html=True)
+ld.markdown("<span style='background:#fff3cd;padding:1px 7px;border-radius:3px;font-size:.76rem'>Grace Period</span>", unsafe_allow_html=True)
+
+st.markdown("---")
+
+
+# =============================================================================
+# SECTION 5 — SENSIBILITÉ (Tornado + Tableau croisé)
+# =============================================================================
+
+st.markdown("## Analyse de Sensibilité")
+t1, t2 = st.tabs(["Variables Clés (Tornado)", "Tableau Croisé Prix × Coût"])
+
+with t1:
+    c_tor, c_tab = st.columns([3, 2])
+    with c_tor:
+        labels = [d["Variable"] for d in tornado_d]
+        im     = [d["im"] / 1e6 * facteur for d in tornado_d]
+        ip     = [d["ip"] / 1e6 * facteur for d in tornado_d]
+        fig_t  = go.Figure()
+        fig_t.add_trace(go.Bar(y=labels, x=im, orientation="h", name="-10%",
+                               marker_color=CLR["rouge"],
+                               text=[f"{v:+,.0f}" for v in im],
+                               textposition="outside"))
+        fig_t.add_trace(go.Bar(y=labels, x=ip, orientation="h", name="+10%",
+                               marker_color=CLR["vert"],
+                               text=[f"{v:+,.0f}" for v in ip],
+                               textposition="outside"))
+        fig_t.add_vline(x=0, line_color="#333", line_width=1)
+        fig_t.update_layout(
+            title=f"Tornado — Impact sur la VAN (M{devise})",
+            xaxis_title=f"M{devise}", barmode="overlay",
+            plot_bgcolor="white", paper_bgcolor="white",
+            height=280, margin=dict(t=40, b=20),
+            legend=dict(orientation="h", y=-0.3),
+        )
+        st.plotly_chart(fig_t, use_container_width=True)
+
+    with c_tab:
+        st.markdown(f"#### Impact sur VAN (M{devise})")
+        df_t = pd.DataFrame([{
+            "Variable"  : d["Variable"],
+            "-10%"      : f"{d['im']/1e6*facteur:+,.0f}",
+            "+10%"      : f"{d['ip']/1e6*facteur:+,.0f}",
+            "Écart"     : f"{d['amp']/1e6*facteur:,.0f}",
+        } for d in tornado_d])
+        st.dataframe(df_t, use_container_width=True, hide_index=True)
+        st.caption(
+            "La variable en tête de liste est le **levier de négociation prioritaire** "
+            "avant signature."
+        )
+
+with t2:
+    fig_h = go.Figure(go.Heatmap(
+        z=df_sens.values.tolist(),
+        x=df_sens.columns.tolist(),
+        y=df_sens.index.tolist(),
+        colorscale=[[0, CLR["rouge"]], [0.5, "#ffffff"], [1, CLR["vert"]]],
+        text=[[f"{v:.0f}" for v in row] for row in df_sens.values],
+        texttemplate="%{text}",
+        colorbar=dict(title=f"VAN M{devise}"),
+    ))
+    fig_h.update_layout(
+        title=f"Sensibilité Croisée VAN — Prix × Coût (M{devise})",
+        xaxis_title="Variation Coût", yaxis_title="Variation Prix",
+        height=320, margin=dict(t=40),
+    )
+    st.plotly_chart(fig_h, use_container_width=True)
+
+st.markdown("---")
+
+
+# =============================================================================
+# SECTION 6 — STRESS TEST & ASSURANCE
+# =============================================================================
+
+st.markdown(f"## Stress Test — {cfg['risque_titre']}")
+
+st.info(
+    f"**Risque :** {cfg['risque_desc']}\n\n"
+    f"**Couverture :** {cfg['assurance_titre']} — {cfg['assurance_desc']}",
+    icon="ℹ️",
+)
+
+# ── Tableau comparatif des 3 scénarios ───────────────────────────────────────
+d_base  = stress["base"]["dmin"]
+d_choc  = stress["choc"]["dmin"]
+d_assur = stress["assurance"]["dmin"]
+
+def dscr_badge(val):
+    if np.isnan(val): return "N/D"
+    if val >= 1.3:    return f"✅ {val:.2f}x"
+    if val >= 1.0:    return f"⚠️ {val:.2f}x"
+    return f"❌ {val:.2f}x"
+
+def treso_fin(rows):
+    return rows[-1]["Tresorerie_cum"] / 1e6 * facteur if rows else 0.0
+
+df_comp = pd.DataFrame({
+    "Critère": [
+        "DSCR Minimum",
+        "Trésorerie cumulée finale",
+        "Perte CA (choc)",
+        "Indemnité reçue",
+        "Coût total primes",
+        "Gain net assurance",
+    ],
+    "Base (nominal)": [
+        dscr_badge(d_base),
+        f"{treso_fin(stress['base']['rows']):,.1f} M{devise}",
+        "—", "—", "—", "—",
+    ],
+    "Choc — Sans Assurance": [
+        dscr_badge(d_choc),
+        f"{treso_fin(stress['choc']['rows']):,.1f} M{devise}",
+        f"{v(stress['perte_brute']):.1f} M{devise}",
+        "—",
+        "—",
+        "—",
+    ],
+    "Choc — Avec Assurance": [
+        dscr_badge(d_assur),
+        f"{treso_fin(stress['assurance']['rows']):,.1f} M{devise}",
+        f"{v(stress['perte_brute']):.1f} M{devise}",
+        f"{v(stress['indemnite']):.1f} M{devise}",
+        f"{v(stress['cout_primes']):.1f} M{devise}",
+        f"{'✅' if stress['gain_net']>0 else '⚠️'} {v(stress['gain_net']):.1f} M{devise}",
+    ],
+})
+
+def style_comp(row):
+    if "DSCR" in str(row["Critère"]):
+        return ["font-weight:600"] * len(row)
+    return [""] * len(row)
+
+st.dataframe(
+    df_comp.style.apply(style_comp, axis=1),
+    use_container_width=True, hide_index=True,
+)
+
+# ── Un seul graphique : DSCR + Trésorerie — 3 scénarios ─────────────────────
+st.plotly_chart(
+    fig_stress_sans_avec(stress, duree, devise, facteur),
+    use_container_width=True,
+)
+
+# ── Interprétation en langage clair ──────────────────────────────────────────
+st.markdown("#### Lecture rapide")
+
+lignes = []
+
+if not np.isnan(d_choc):
+    if d_choc < SEUIL_DEFAUT:
+        lignes.append(
+            f"Sans assurance, un sinistre à l'année {stress['an_choc']} ferait chuter le DSCR "
+            f"à **{d_choc:.2f}x** — en dessous du seuil de défaut. "
+            "Le projet ne peut plus rembourser sa dette cette année-là."
+        )
+    elif d_choc < SEUIL_BANCAIRE:
+        lignes.append(
+            f"Sans assurance, le DSCR tomberait à **{d_choc:.2f}x** "
+            f"(sous le seuil bancaire de 1.3x). "
+            "La banque exigerait probablement un compte de réserve ou un covenant de couverture."
+        )
+    else:
+        lignes.append(
+            f"Même sans assurance, le projet absorbe le choc "
+            f"avec un DSCR de **{d_choc:.2f}x**. "
+            "L'assurance reste une précaution recommandée, non une nécessité absolue."
+        )
+
+if not np.isnan(d_assur):
+    gain_dscr = d_assur - d_choc if not np.isnan(d_choc) else 0
+    if d_assur >= SEUIL_BANCAIRE:
+        lignes.append(
+            f"Avec la **{cfg['assurance_titre']}**, le DSCR remonte à **{d_assur:.2f}x** "
+            f"({gain_dscr:+.2f}x vs choc sans assurance) — la bancabilité est restaurée."
+        )
+    else:
+        lignes.append(
+            f"Avec assurance, le DSCR atteint **{d_assur:.2f}x** "
+            f"({gain_dscr:+.2f}x) — amélioré mais encore sous le seuil de 1.3x. "
+            "Envisager une réserve de liquidité complémentaire."
+        )
+
+if stress["gain_net"] > 0:
+    lignes.append(
+        f"Financièrement, l'assurance est rentable sur {duree} ans : "
+        f"l'indemnité estimée ({v(stress['indemnite']):.1f} M{devise}) "
+        f"dépasse le coût total des primes ({v(stress['cout_primes']):.1f} M{devise})."
+    )
+else:
+    lignes.append(
+        f"Le coût des primes sur {duree} ans ({v(stress['cout_primes']):.1f} M{devise}) "
+        f"dépasse l'indemnité unique ({v(stress['indemnite']):.1f} M{devise}). "
+        "C'est normal pour un sinistre rare : la valeur de l'assurance est la sécurité "
+        "qu'elle procure au banquier, pas le gain financier attendu."
+    )
+
+for lg in lignes:
+    st.markdown(f"- {lg}")
 
 st.markdown("---")
 st.markdown(
-    f"<div style='font-size:.7rem;color:#6c757d;text-align:center'>"
-    f"CommodityWatch v4.0 — 1 USD = {TAUX_CHANGE:.0f} FCFA — "
-    "Document indicatif, ne se substitue pas à une due diligence financière et juridique complète."
+    f"<div style='font-size:.70rem;color:#6c757d;text-align:center'>"
+    f"CommodityWatch v4.1 — 1 USD = {TAUX_CHANGE:.0f} FCFA — "
+    "Document indicatif pré-investissement. "
+    "Ne se substitue pas à une due diligence financière et juridique complète."
     "</div>",
     unsafe_allow_html=True,
 )
