@@ -701,7 +701,7 @@ st.markdown("""
 
 with st.sidebar:
     st.markdown("### CommodityWatch v4.1")
-    st.caption("Overview Pré-Investissement")
+    st.caption("OAD")
     st.markdown("---")
 
     devise  = st.radio("Devise", ["FCFA", "USD"], horizontal=True)
@@ -865,8 +865,7 @@ st.markdown(
     unsafe_allow_html=True,
 )
 st.caption(
-    "Overview pré-investissement — première lecture à chaud pour promoteur, "
-    "analyste et comité de crédit bancaire."
+    "Overview pré-investissement"
 )
 
 if not lancer:
